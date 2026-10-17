@@ -41,13 +41,25 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
 
     public Task Leave(string roomName) => Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
 
-    public async Task SendPrivate(string toUserId, string message)
+    /// <summary>Puts the connection back in its user group after a reconnect.</summary>
+    public Task Rejoin()
+    {
+        string? userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        return string.IsNullOrEmpty(userId)
+            ? Task.CompletedTask
+            : Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
+    }
+
+    public async Task<ChatMessageDto?> SendPrivate(string toUserId, string message)
     {
         var result = await chat.SendPrivateMessageAsync(toUserId, message);
-        if (!result.IsSuccess)
+        if (!result.IsSuccess || result.Value is null)
         {
             await Clients.Caller.SendAsync(Constants.HubEvents.Error, result.GetDisplayMessage());
+            return null;
         }
+
+        return result.Value;
     }
 
     public override async Task OnConnectedAsync()
@@ -73,6 +85,7 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
             Connections[Context.ConnectionId] = new Connection(presence);
         }
 
+        await Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
         await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, existing);
         await Clients.Others.SendAsync(Constants.HubEvents.AddUser, presence);
         await base.OnConnectedAsync();

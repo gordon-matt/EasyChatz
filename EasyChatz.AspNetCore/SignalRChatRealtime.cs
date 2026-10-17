@@ -13,11 +13,11 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
 
     public async Task PublishPrivateMessageAsync(ChatMessageDto message, CancellationToken cancellationToken = default)
     {
-        await hub.Clients.User(message.FromUserId).SendAsync(Constants.HubEvents.NewPrivateMessage, message, cancellationToken);
+        await UserAsync(message.FromUserId, Constants.HubEvents.NewPrivateMessage, message, cancellationToken);
         if (!string.IsNullOrEmpty(message.ToUserId)
             && !string.Equals(message.ToUserId, message.FromUserId, StringComparison.Ordinal))
         {
-            await hub.Clients.User(message.ToUserId).SendAsync(Constants.HubEvents.NewPrivateMessage, message, cancellationToken);
+            await UserAsync(message.ToUserId, Constants.HubEvents.NewPrivateMessage, message, cancellationToken);
         }
     }
 
@@ -29,11 +29,24 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
             return;
         }
 
-        await hub.Clients.User(message.FromUserId).SendAsync(Constants.HubEvents.RemoveMessage, message, cancellationToken);
+        await UserAsync(message.FromUserId, Constants.HubEvents.RemoveMessage, message, cancellationToken);
         if (!string.IsNullOrEmpty(message.ToUserId))
         {
-            await hub.Clients.User(message.ToUserId).SendAsync(Constants.HubEvents.RemoveMessage, message, cancellationToken);
+            await UserAsync(message.ToUserId, Constants.HubEvents.RemoveMessage, message, cancellationToken);
         }
+    }
+
+    private async Task UserAsync(string userId, string eventName, object payload, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(userId))
+        {
+            return;
+        }
+
+        // Group covers the connection we tracked. User() covers a reconnect that dropped the group.
+        // The browser ignores the second copy of the same message.
+        await hub.Clients.Group(Constants.UserGroup(userId)).SendAsync(eventName, payload, cancellationToken);
+        await hub.Clients.User(userId).SendAsync(eventName, payload, cancellationToken);
     }
 
     public Task PublishRoomAddedAsync(ChatRoomDto room, CancellationToken cancellationToken = default) =>

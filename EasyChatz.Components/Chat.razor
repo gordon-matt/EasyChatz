@@ -166,7 +166,7 @@
                         else
                         {
                             <textarea @ref="composer" rows="1" maxlength="@MaxMessageLength" placeholder="Write a message" aria-label="Message"
-                                      value="@draft" @oninput="OnDraft"></textarea>
+                                      value="@draft" @oninput="OnDraft" @onkeydown="OnComposerKeyDown"></textarea>
                             <button type="submit" class="ec-send" disabled="@(!CanSend)" title="Send">
                                 <Icon Name="send" />
                             </button>

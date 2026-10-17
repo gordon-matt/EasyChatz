@@ -13,6 +13,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private readonly List<ChatConversationDto> conversations = [];
     private readonly Dictionary<int, int> roomUnread = [];
     private readonly List<ChatMessageDto> messages = [];
+    private readonly HashSet<int> seenMessageIds = [];
     private readonly List<ChatPresenceDto> online = [];
 
     private ChatUser? me;
@@ -23,7 +24,6 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private ElementReference root;
     private ElementReference scroller;
     private ElementReference composer;
-    private bool composerBound;
     private bool connected;
     private bool peopleOpen;
     private bool newRoomOpen;
@@ -127,16 +127,15 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (!composerBound && !ReadOnlyThread && (activeRoom is not null || activeConversation is not null))
+        if (!ReadOnlyThread && (activeRoom is not null || activeConversation is not null))
         {
             try
             {
                 await module.InvokeVoidAsync("bindComposer", sessionId, composer);
-                composerBound = true;
             }
             catch (JSException)
             {
-                composerBound = false;
+                // The hub is still connecting, or the box was redrawn. The next render tries again.
             }
         }
 
@@ -182,11 +181,26 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
     }
 
+    private async Task ReloadConversationsAsync()
+    {
+        var conversationResult = await ChatService.GetConversationsAsync();
+        if (!conversationResult.IsSuccess || conversationResult.Value is null)
+        {
+            return;
+        }
+
+        var onlyLocal = conversations
+            .Where(c => conversationResult.Value.All(saved => !string.Equals(saved.UserId, c.UserId, StringComparison.Ordinal)))
+            .ToList();
+        conversations.Clear();
+        conversations.AddRange(conversationResult.Value);
+        conversations.AddRange(onlyLocal);
+    }
+
     private async Task OpenRoomAsync(ChatRoomDto room)
     {
         activeRoom = room;
         activeConversation = null;
-        composerBound = false;
         roomUnread.Remove(room.Id);
         error = null;
         messages.Clear();
@@ -196,6 +210,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             await module.InvokeVoidAsync("join", sessionId, room.Name);
         }
 
+        await ReloadConversationsAsync();
         await PublishConversationAsync(new ChatConversationEvent("room", room.Id.ToString(), room.Name));
     }
 
@@ -203,10 +218,10 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     {
         activeConversation = conversation;
         activeRoom = null;
-        composerBound = false;
         error = null;
         messages.Clear();
         await Notifications.MarkReadAsync(conversation.UserId);
+        await ReloadConversationsAsync();
         ReplaceConversation(conversation with { UnreadCount = 0 });
         await LoadMessagesAsync(beforeId: null, older: false);
         await PublishConversationAsync(new ChatConversationEvent("private", conversation.UserId, conversation.DisplayName));
@@ -315,8 +330,19 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
         try
         {
-            await module.InvokeVoidAsync("sendPrivate", sessionId, activeConversation.UserId, text);
+            string? payload = await module.InvokeAsync<string?>("sendPrivate", sessionId, activeConversation.UserId, text);
             draft = string.Empty;
+            var sent = Read(payload, EasyChatzJsonContext.Default.ChatMessageDto);
+            if (sent is null)
+            {
+                error ??= "The message could not be sent.";
+                return;
+            }
+
+            AddMessage(sent);
+            scrollPending = true;
+            EnsureConversation(activeConversation.UserId, activeConversation.DisplayName);
+            await OnMessage.InvokeAsync(sent);
         }
         catch (JSException)
         {
@@ -329,7 +355,19 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     }
 
     [JSInvokable]
-    public Task SendFromComposer() => SendAsync();
+    public async Task SendFromComposer(string? text)
+    {
+        if (text is not null)
+        {
+            draft = text;
+        }
+
+        await SendAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnComposerKeyDown(KeyboardEventArgs args) =>
+        args.Key == "Enter" && !args.ShiftKey ? SendFromComposer(null) : Task.CompletedTask;
 
     private Task OnDraft(ChangeEventArgs args)
     {
@@ -421,6 +459,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (!seenMessageIds.Add(message.Id))
+        {
+            return;
+        }
+
         if (activeRoom is not null && message.ToRoomId == activeRoom.Id)
         {
             AddMessage(message);
@@ -432,6 +475,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
 
         await OnMessage.InvokeAsync(message);
+        await InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
@@ -443,29 +487,34 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (!seenMessageIds.Add(message.Id))
+        {
+            return;
+        }
+
         string partnerId = string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal)
             ? message.ToUserId ?? string.Empty
             : message.FromUserId;
+        bool mine = string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal);
         bool open = activeConversation is not null && string.Equals(activeConversation.UserId, partnerId, StringComparison.Ordinal);
         if (open)
         {
             AddMessage(message);
             scrollPending = true;
-            if (!string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal))
-            {
-                await Notifications.MarkReadAsync(partnerId);
-            }
         }
-        else if (!string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal))
+
+        if (!mine)
         {
+            // Leave the badge in place until the conversation is opened, so switching away still shows the reply.
             BumpConversation(partnerId, message.FromDisplayName);
         }
         else
         {
-            EnsureConversation(partnerId, message.ToUserId == me.Id ? message.FromDisplayName : partnerId);
+            EnsureConversation(partnerId, activeConversation?.DisplayName ?? partnerId);
         }
 
         await OnMessage.InvokeAsync(message);
+        await InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
@@ -475,6 +524,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (removed is not null)
         {
             messages.RemoveAll(m => m.Id == removed.MessageId);
+            return InvokeAsync(StateHasChanged);
         }
 
         return Task.CompletedTask;
@@ -487,6 +537,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (room is not null)
         {
             UpsertRoom(room);
+            return InvokeAsync(StateHasChanged);
         }
 
         return Task.CompletedTask;
@@ -506,6 +557,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         {
             await module.InvokeVoidAsync("join", sessionId, room.Name);
         }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
@@ -515,6 +568,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (room is not null)
         {
             RemoveRoom(room.RoomId);
+            return InvokeAsync(StateHasChanged);
         }
 
         return Task.CompletedTask;
@@ -533,7 +587,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             online.AddRange(people);
         }
 
-        return Task.CompletedTask;
+        return InvokeAsync(StateHasChanged);
     }
 
     [JSInvokable]
@@ -543,6 +597,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (person is not null && online.All(p => p.ConnectionId != person.ConnectionId))
         {
             online.Add(person);
+            return InvokeAsync(StateHasChanged);
         }
 
         return Task.CompletedTask;
@@ -555,6 +610,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (person is not null)
         {
             online.RemoveAll(p => p.ConnectionId == person.ConnectionId);
+            return InvokeAsync(StateHasChanged);
         }
 
         return Task.CompletedTask;
@@ -564,11 +620,12 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     public Task OnHubError(string message)
     {
         error = string.IsNullOrWhiteSpace(message) ? "Something went wrong." : message;
-        return Task.CompletedTask;
+        return InvokeAsync(StateHasChanged);
     }
 
     private void AddMessage(ChatMessageDto message)
     {
+        seenMessageIds.Add(message.Id);
         if (messages.All(m => m.Id != message.Id))
         {
             messages.Add(message);
@@ -659,8 +716,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await OnConversationChanged.InvokeAsync(conversation);
     }
 
-    private static T? Read<T>(string json, JsonTypeInfo<T> type) =>
-        string.IsNullOrWhiteSpace(json) ? default : JsonSerializer.Deserialize(json, type);
+    private static T? Read<T>(string? json, JsonTypeInfo<T> type) =>
+        string.IsNullOrWhiteSpace(json) || json == "null" ? default : JsonSerializer.Deserialize(json, type);
 
     private static bool IsAnnouncements(ChatRoomDto room) =>
         string.Equals(room.Name, Constants.AnnouncementsRoomName, StringComparison.OrdinalIgnoreCase);

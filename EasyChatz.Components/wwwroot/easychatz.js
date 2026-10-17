@@ -34,26 +34,33 @@ export async function connect(sessionId, hubUrl, includeCredentials, dotNetRef) 
     }
 
     const connection = new signalR.HubConnectionBuilder()
-        .withUrl(hubUrl, { withCredentials: !!includeCredentials })
+        .withUrl(hubUrl, { withCredentials: includeCredentials !== false })
         .withAutomaticReconnect()
         .build();
 
-    const send = (method, payload) => dotNetRef.invokeMethodAsync(method, JSON.stringify(payload ?? null));
+    // Don't return the .NET promise. The circuit may be waiting on this connection,
+    // and waiting here would stall the reply until the next click.
+    const raise = (method, payload) => {
+        void dotNetRef.invokeMethodAsync(method, JSON.stringify(payload ?? null));
+    };
 
-    connection.on('newMessage', message => send('OnRoomMessage', message));
-    connection.on('newPrivateMessage', message => send('OnPrivateMessage', message));
-    connection.on('removeChatMessage', message => send('OnMessageRemoved', message));
-    connection.on('addChatRoom', room => send('OnRoomAdded', room));
-    connection.on('updateChatRoom', room => send('OnRoomUpdated', room));
-    connection.on('removeChatRoom', room => send('OnRoomRemoved', room));
-    connection.on('onRoomDeleted', room => send('OnRoomDeleted', room));
-    connection.on('setOnlineUsers', users => send('OnOnlineUsers', users));
-    connection.on('addUser', user => send('OnUserJoined', user));
-    connection.on('removeUser', user => send('OnUserLeft', user));
-    connection.on('chatError', message => dotNetRef.invokeMethodAsync('OnHubError', message ?? 'Something went wrong.'));
+    connection.on('newMessage', message => { raise('OnRoomMessage', message); });
+    connection.on('newPrivateMessage', message => { raise('OnPrivateMessage', message); });
+    connection.on('removeChatMessage', message => { raise('OnMessageRemoved', message); });
+    connection.on('addChatRoom', room => { raise('OnRoomAdded', room); });
+    connection.on('updateChatRoom', room => { raise('OnRoomUpdated', room); });
+    connection.on('removeChatRoom', room => { raise('OnRoomRemoved', room); });
+    connection.on('onRoomDeleted', room => { raise('OnRoomDeleted', room); });
+    connection.on('setOnlineUsers', users => { raise('OnOnlineUsers', users); });
+    connection.on('addUser', user => { raise('OnUserJoined', user); });
+    connection.on('removeUser', user => { raise('OnUserLeft', user); });
+    connection.on('chatError', message => {
+        void dotNetRef.invokeMethodAsync('OnHubError', message ?? 'Something went wrong.');
+    });
 
-    const session = { connection, room: null, dotNetRef };
+    const session = { connection, room: null, composer: null, dotNetRef };
     connection.onreconnected(async () => {
+        await connection.invoke('Rejoin');
         if (session.room) {
             await connection.invoke('Join', session.room);
         }
@@ -71,21 +78,24 @@ export async function join(sessionId, roomName) {
 
 export async function sendPrivate(sessionId, toUserId, text) {
     const session = sessionOrThrow(sessionId);
-    await session.connection.invoke('SendPrivate', toUserId, text);
+    const message = await session.connection.invoke('SendPrivate', toUserId, text);
+    return message ? JSON.stringify(message) : null;
 }
 
 export function bindComposer(sessionId, element) {
     const session = sessionOrThrow(sessionId);
-    if (element.dataset.ecComposer === sessionId) {
+    if (!element || session.composer === element) {
         return;
     }
 
-    element.dataset.ecComposer = sessionId;
+    session.composer = element;
     element.addEventListener('keydown', event => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            session.dotNetRef.invokeMethodAsync('SendFromComposer');
+        if (event.key !== 'Enter' || event.shiftKey || event.isComposing) {
+            return;
         }
+
+        event.preventDefault();
+        session.dotNetRef.invokeMethodAsync('SendFromComposer', element.value);
     });
 }
 

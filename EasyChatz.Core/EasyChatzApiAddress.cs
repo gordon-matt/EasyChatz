@@ -21,5 +21,5 @@ public sealed class EasyChatzApiAddress
     public bool IncludeCredentials { get; }
 
     public static EasyChatzApiAddress Relative(string apiPrefix, string hubPath) =>
-        new(apiPrefix.Trim('/') + "/", "/" + hubPath.Trim('/'));
+        new(apiPrefix.Trim('/') + "/", "/" + hubPath.Trim('/'), includeCredentials: true);
 }

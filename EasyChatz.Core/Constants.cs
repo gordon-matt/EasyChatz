@@ -17,6 +17,8 @@ public static class Constants
     /// <summary>Owner of the seeded Announcements room. Not a real account.</summary>
     public const string SystemUserId = "system";
 
+    public static string UserGroup(string userId) => "user:" + userId;
+
     public const string RequestHeaderName = "X-EasyChatz";
 
     public const string RequestHeaderValue = "1";
