@@ -82,27 +82,41 @@ export async function sendPrivate(sessionId, toUserId, text) {
     return message ? JSON.stringify(message) : null;
 }
 
-export function bindComposer(sessionId, element) {
-    const session = sessionOrThrow(sessionId);
-    if (!element || session.composer === element) {
-        return;
+export function bindComposer(element, dotNetRef) {
+    if (!element) {
+        return false;
     }
 
-    session.composer = element;
+    if (element.dataset.ecBound === '1') {
+        return true;
+    }
+
+    element.dataset.ecBound = '1';
     element.addEventListener('keydown', event => {
         if (event.key !== 'Enter' || event.shiftKey || event.isComposing) {
             return;
         }
 
         event.preventDefault();
-        session.dotNetRef.invokeMethodAsync('SendFromComposer', element.value);
+        void dotNetRef.invokeMethodAsync('SendFromComposer', element.value);
     });
+    return true;
 }
 
 export function scrollToEnd(element) {
-    if (element) {
-        element.scrollTop = element.scrollHeight;
+    if (!element) {
+        return;
     }
+
+    const apply = () => {
+        element.scrollTop = element.scrollHeight;
+    };
+
+    apply();
+    requestAnimationFrame(() => {
+        apply();
+        requestAnimationFrame(apply);
+    });
 }
 
 export function isNearTop(element) {
@@ -119,8 +133,12 @@ export function restoreHeight(element, previous) {
     }
 }
 
-export function raise(element, name, detail) {
-    element?.dispatchEvent(new CustomEvent(name, { bubbles: true, detail }));
+export function raise(element, eventName, kind, id, name) {
+    element?.dispatchEvent(new CustomEvent(eventName, {
+        bubbles: true,
+        composed: true,
+        detail: { kind, id, name }
+    }));
 }
 
 export async function disconnect(sessionId) {

@@ -7,6 +7,7 @@ namespace EasyChatz.Components;
 public partial class Chat : ComponentBase, IAsyncDisposable
 {
     private const int PageSize = 50;
+    private const string ConnectingMessage = "Still connecting…";
 
     private readonly string sessionId = Guid.NewGuid().ToString("N");
     private readonly List<ChatRoomDto> rooms = [];
@@ -26,6 +27,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private ElementReference composer;
     private bool composerBound;
     private bool connected;
+    private bool connecting;
+    private bool connectFailed;
     private bool disposed;
     private bool peopleOpen;
     private bool newRoomOpen;
@@ -119,19 +122,21 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && me is not null)
+        // WebAssembly renders once before OnInitializedAsync finishes, so the signed-in user
+        // is often missing on the first render. Connect on the first render that has one.
+        if (disposed || me is null)
         {
-            await ConnectAsync();
+            return;
         }
 
-        if (module is null)
+        if (module is null && !await ImportModuleAsync())
         {
             return;
         }
 
         if (!composerBound && !ReadOnlyThread && (activeRoom is not null || activeConversation is not null))
         {
-            composerBound = await InvokeQuietlyAsync("bindComposer", sessionId, composer);
+            composerBound = await TryBindComposerAsync();
         }
 
         if (scrollPending)
@@ -145,23 +150,96 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             restoreFromHeight = null;
             await InvokeQuietlyAsync("restoreHeight", scroller, previous);
         }
+
+        if (!connected && !connecting && !connectFailed)
+        {
+            await ConnectAsync();
+        }
     }
 
-    private async Task ConnectAsync()
+    private async Task<bool> ImportModuleAsync()
     {
         try
         {
             module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/EasyChatz.Components/easychatz.js");
-            self = DotNetObjectReference.Create(this);
-            await module.InvokeVoidAsync("connect", sessionId, Address.HubUrl, Address.IncludeCredentials, self);
-            connected = true;
-            if (activeRoom is not null)
-            {
-                await InvokeQuietlyAsync("join", sessionId, activeRoom.Name);
-            }
+            self ??= DotNetObjectReference.Create(this);
+            return module is not null;
         }
         catch (Exception ex) when (IsBrowserGone(ex))
         {
+            return false;
+        }
+        catch (JSException)
+        {
+            connectFailed = true;
+            return false;
+        }
+    }
+
+    private async Task<bool> TryBindComposerAsync()
+    {
+        if (module is null || self is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return await module.InvokeAsync<bool>("bindComposer", composer, self);
+        }
+        catch (Exception ex) when (IsBrowserGone(ex))
+        {
+            return false;
+        }
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (disposed || module is null || self is null || connected || connecting)
+        {
+            return;
+        }
+
+        connecting = true;
+        try
+        {
+            await module.InvokeVoidAsync("connect", sessionId, Address.HubUrl, Address.IncludeCredentials, self);
+            connected = true;
+            connectFailed = false;
+            bool clearError = error == ConnectingMessage;
+            if (clearError)
+            {
+                error = null;
+            }
+
+            if (activeRoom is not null)
+            {
+                await InvokeQuietlyAsync("join", sessionId, activeRoom.Name);
+                await PublishConversationAsync(new ChatConversationEvent("room", activeRoom.Id.ToString(), activeRoom.Name));
+            }
+            else if (activeConversation is not null)
+            {
+                await PublishConversationAsync(new ChatConversationEvent("private", activeConversation.UserId, activeConversation.DisplayName));
+            }
+
+            if (clearError)
+            {
+                await RenderAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException)
+        {
+            connectFailed = true;
+        }
+        catch (Exception ex) when (IsBrowserGone(ex))
+        {
+        }
+        finally
+        {
+            connecting = false;
         }
     }
 
@@ -324,10 +402,22 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (activeConversation is null || module is null)
+        if (module is null)
+        {
+            connectFailed = false;
+            await ImportModuleAsync();
+        }
+
+        if (!connected)
+        {
+            connectFailed = false;
+            await ConnectAsync();
+        }
+
+        if (activeConversation is null || module is null || !connected)
         {
             busy = false;
-            error = connected ? "Choose a conversation first." : "Still connecting…";
+            error = activeConversation is null ? "Choose a conversation first." : ConnectingMessage;
             return;
         }
 
@@ -734,7 +824,13 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private async Task PublishConversationAsync(ChatConversationEvent conversation)
     {
         // The DOM event is for MVC and React. A canceled browser call must not fail the click that opened the chat.
-        await InvokeQuietlyAsync("raise", root, Constants.DomEvents.Conversation, conversation);
+        await InvokeQuietlyAsync(
+            "raise",
+            root,
+            Constants.DomEvents.Conversation,
+            conversation.Kind,
+            conversation.Id,
+            conversation.Name);
         await OnConversationChanged.InvokeAsync(conversation);
     }
 
@@ -750,7 +846,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             await module.InvokeVoidAsync(identifier, args);
             return true;
         }
-        catch (Exception ex) when (IsBrowserGone(ex))
+        catch (Exception)
         {
             return false;
         }
