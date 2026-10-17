@@ -2,8 +2,10 @@ namespace EasyChatz.Services;
 
 public sealed class ChatNotificationService(
     IRepository<MessageNotification> notifications,
+    IRepository<ChatMessage> messages,
     IChatUserDirectory directory,
-    IChatCurrentUser currentUser) : IChatNotificationService
+    IChatCurrentUser currentUser,
+    IChatRealtime realtime) : IChatNotificationService, IChatDeliveryQueue
 {
     public async Task CreateAsync(int chatMessageId, string fromUserId, string toUserId, CancellationToken cancellationToken = default)
     {
@@ -61,7 +63,52 @@ public sealed class ChatNotificationService(
             setters => setters.SetProperty(n => n.IsRead, true),
             ContextOptions.ForCancellationToken(cancellationToken));
 
+        await realtime.PublishUnreadChangedAsync(actor.Id, cancellationToken);
         return Result.Success();
+    }
+
+    public async Task<IReadOnlyList<ChatPendingNotice>> ListPendingAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default)
+    {
+        List<MessageNotification> rows;
+        using (var connection = notifications.OpenConnection())
+        {
+            rows = await connection.Query(n => !n.IsRead && n.DeliveredAtUtc == null && n.CreatedAtUtc <= createdBeforeUtc)
+                .OrderBy(n => n.CreatedAtUtc)
+                .ToListAsync(cancellationToken);
+        }
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        int[] ids = rows.Select(n => n.ChatMessageId).Distinct().ToArray();
+        Dictionary<int, string> content;
+        using (var connection = messages.OpenConnection())
+        {
+            var found = await connection.Query(m => ids.Contains(m.Id)).ToListAsync(cancellationToken);
+            content = found.ToDictionary(m => m.Id, m => m.Content);
+        }
+
+        return rows
+            .Where(n => content.ContainsKey(n.ChatMessageId))
+            .Select(n => new ChatPendingNotice(n.Id, n.ChatMessageId, n.FromUserId, n.ToUserId, content[n.ChatMessageId], n.CreatedAtUtc))
+            .ToList();
+    }
+
+    public async Task MarkDeliveredAsync(IReadOnlyCollection<int> noticeIds, CancellationToken cancellationToken = default)
+    {
+        int[] ids = noticeIds.Where(id => id > 0).Distinct().ToArray();
+        if (ids.Length == 0)
+        {
+            return;
+        }
+
+        DateTime now = DateTime.UtcNow;
+        await notifications.UpdateAsync(
+            n => ids.Contains(n.Id) && n.DeliveredAtUtc == null,
+            setters => setters.SetProperty(n => n.DeliveredAtUtc, now),
+            ContextOptions.ForCancellationToken(cancellationToken));
     }
 
     private sealed record UnreadRow(string FromUserId, int Count);

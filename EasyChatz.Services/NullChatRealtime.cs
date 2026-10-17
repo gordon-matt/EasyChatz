@@ -14,4 +14,6 @@ internal sealed class NullChatRealtime : IChatRealtime
     public Task PublishRoomUpdatedAsync(ChatRoomUpdatedDto room, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task PublishRoomRemovedAsync(ChatRoomRemovedDto room, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task PublishUnreadChangedAsync(string userId, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

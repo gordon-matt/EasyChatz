@@ -44,6 +44,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private string newRoomName = string.Empty;
     private string renameName = string.Empty;
     private string? error;
+    private string? appliedWithUserId;
 
     [Inject]
     private IChatService ChatService { get; set; } = default!;
@@ -75,10 +76,27 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     [Parameter]
     public EventCallback<ChatMessageDto> OnMessage { get; set; }
 
+    /// <summary>Opens this direct message when set, including when the value changes. The user must exist in the host directory.</summary>
+    [Parameter]
+    public string? WithUserId { get; set; }
+
+    /// <summary>Shown beside Message in the online list when a host is listening. Hidden otherwise.</summary>
+    [Parameter]
+    public EventCallback<ChatPresenceDto> OnOpenUser { get; set; }
+
+    [Parameter]
+    public string OpenUserText { get; set; } = "Open";
+
+    /// <summary>Caps the composer. The server still enforces <c>EasyChatz:MaxMessageLength</c>.</summary>
+    [Parameter]
+    public int? MaxLength { get; set; }
+
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
-    private int MaxMessageLength => Constants.MaxLengths.Message;
+    private int MaxMessageLength => MaxLength is int length and > 0
+        ? Math.Min(length, Constants.MaxLengths.Message)
+        : Constants.MaxLengths.Message;
 
     private bool CanSend => !busy && !string.IsNullOrWhiteSpace(draft) && !ReadOnlyThread;
 
@@ -114,10 +132,27 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
         me = current.Value;
         await ReloadListsAsync();
-        if (rooms.Count > 0)
+        if (!string.IsNullOrWhiteSpace(WithUserId))
+        {
+            appliedWithUserId = WithUserId;
+            await OpenWithUserAsync(WithUserId);
+        }
+        else if (rooms.Count > 0)
         {
             await OpenRoomAsync(rooms[0]);
         }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (me is null || string.IsNullOrWhiteSpace(WithUserId)
+            || string.Equals(appliedWithUserId, WithUserId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        appliedWithUserId = WithUserId;
+        await OpenWithUserAsync(WithUserId);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -306,6 +341,23 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         ReplaceConversation(conversation with { UnreadCount = 0 });
         await LoadMessagesAsync(beforeId: null, older: false);
         await PublishConversationAsync(new ChatConversationEvent("private", conversation.UserId, conversation.DisplayName));
+    }
+
+    private async Task OpenWithUserAsync(string userId)
+    {
+        var result = await ChatService.GetConversationAsync(userId);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            error = result.GetDisplayMessage();
+            return;
+        }
+
+        if (conversations.All(c => !string.Equals(c.UserId, result.Value.UserId, StringComparison.Ordinal)))
+        {
+            conversations.Insert(0, result.Value);
+        }
+
+        await OpenConversationAsync(result.Value);
     }
 
     private async Task MessagePersonAsync(ChatPresenceDto person)

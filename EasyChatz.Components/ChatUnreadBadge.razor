@@ -1,0 +1,6 @@
+@implements IAsyncDisposable
+
+@if (Count > 0)
+{
+    <span class="ec-root ec-unread @Class" data-theme="@Theme" title="@Count unread" @attributes="AdditionalAttributes">@Count</span>
+}

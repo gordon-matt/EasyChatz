@@ -77,6 +77,31 @@ public sealed class ChatServiceTests
     }
 
     [Fact]
+    public async Task Pending_delivery_is_unread_mail_a_host_has_not_taken()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+        var queue = database.Delivery;
+
+        var sent = await database.Chat.SendPrivateMessageAsync("blair", "Bring the album", cancellationToken);
+        Assert.True(sent.IsSuccess);
+
+        var waiting = await queue.ListPendingAsync(DateTime.UtcNow.AddMinutes(1), cancellationToken);
+        var notice = Assert.Single(waiting);
+        Assert.Equal("alex", notice.FromUserId);
+        Assert.Equal("blair", notice.ToUserId);
+        Assert.Equal("Bring the album", notice.Content);
+
+        await queue.MarkDeliveredAsync([notice.Id], cancellationToken);
+        var after = await queue.ListPendingAsync(DateTime.UtcNow.AddMinutes(1), cancellationToken);
+        Assert.Empty(after);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var stillUnread = await database.Notifications.GetUnreadAsync(cancellationToken);
+        Assert.Equal(1, stillUnread.Value!.Single().UnreadCount);
+    }
+
+    [Fact]
     public async Task Only_the_sender_can_delete_a_message_and_pages_walk_backwards()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

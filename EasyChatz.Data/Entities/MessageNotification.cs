@@ -12,6 +12,9 @@ public class MessageNotification : BaseEntity<int>
     /// <summary>True once the recipient opens that conversation.</summary>
     public bool IsRead { get; set; }
 
+    /// <summary>Set when a host channel has taken this notice. Null while it is still waiting.</summary>
+    public DateTime? DeliveredAtUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public virtual ChatMessage Message { get; set; } = null!;
@@ -26,6 +29,7 @@ public class MessageNotificationMap : IEntityTypeConfiguration<MessageNotificati
         builder.Property(m => m.FromUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.ToUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.CreatedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
+        builder.Property(m => m.DeliveredAtUtc).HasConversion(UtcDateTimeConverter.Instance);
 
         builder.HasOne(m => m.Message)
             .WithMany(m => m.Notifications)
@@ -33,5 +37,6 @@ public class MessageNotificationMap : IEntityTypeConfiguration<MessageNotificati
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(m => new { m.ToUserId, m.FromUserId, m.IsRead });
+        builder.HasIndex(m => new { m.IsRead, m.DeliveredAtUtc });
     }
 }

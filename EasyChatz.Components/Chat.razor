@@ -192,6 +192,10 @@
                         <div class="ec-person">
                             <span class="ec-avatar">@Initials(person.DisplayName)<i class="ec-presence"></i></span>
                             <span class="ec-nav-title">@person.DisplayName</span>
+                            @if (OnOpenUser.HasDelegate)
+                            {
+                                <button type="button" class="ec-text-button" @onclick="() => OnOpenUser.InvokeAsync(person)">@OpenUserText</button>
+                            }
                             <button type="button" class="ec-text-button" @onclick="() => MessagePersonAsync(person)">Message</button>
                         </div>
                     }

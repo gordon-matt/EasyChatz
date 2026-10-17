@@ -141,6 +141,32 @@ export function raise(element, eventName, kind, id, name) {
     }));
 }
 
+export async function watchUnread(sessionId, hubUrl, includeCredentials, dotNetRef) {
+    const signalR = await loadSignalR();
+    const previous = sessions.get(sessionId);
+    if (previous) {
+        await previous.connection.stop();
+    }
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl(hubUrl, { withCredentials: includeCredentials !== false })
+        .withAutomaticReconnect()
+        .build();
+
+    const raise = () => {
+        void dotNetRef.invokeMethodAsync('OnUnreadChanged');
+    };
+
+    connection.on('newPrivateMessage', raise);
+    connection.on('unreadChanged', raise);
+    connection.onreconnected(async () => {
+        await connection.invoke('Rejoin');
+    });
+
+    await connection.start();
+    sessions.set(sessionId, { connection, room: null, composer: null, dotNetRef });
+}
+
 export async function disconnect(sessionId) {
     const session = sessions.get(sessionId);
     if (!session) {

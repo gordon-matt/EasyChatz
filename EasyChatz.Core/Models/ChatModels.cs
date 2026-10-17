@@ -35,6 +35,18 @@ public sealed record ChatMessageRemovedDto(int MessageId, int? RoomId, string? R
 
 public sealed record ChatConversationDto(string UserId, string DisplayName, int UnreadCount);
 
+/// <summary>
+/// An unread direct message that no host channel (email, push, anything else) has taken yet.
+/// A background job reads these. They are not exposed to the browser.
+/// </summary>
+public sealed record ChatPendingNotice(
+    int Id,
+    int MessageId,
+    string FromUserId,
+    string ToUserId,
+    string Content,
+    DateTime CreatedAtUtc);
+
 public sealed record ChatPresenceDto(string ConnectionId, string UserId, string DisplayName, bool IsAdministrator);
 
 public sealed record SaveRoomRequest(string? Name);

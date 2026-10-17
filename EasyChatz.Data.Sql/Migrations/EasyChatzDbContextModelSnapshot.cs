@@ -110,6 +110,9 @@ namespace EasyChatz.Data.Sql.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("FromUserId")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -128,6 +131,8 @@ namespace EasyChatz.Data.Sql.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ChatMessageId");
+
+                    b.HasIndex("IsRead", "DeliveredAtUtc");
 
                     b.HasIndex("ToUserId", "FromUserId", "IsRead");
 

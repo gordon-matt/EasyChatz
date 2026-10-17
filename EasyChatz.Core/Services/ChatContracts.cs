@@ -40,6 +40,17 @@ public interface IChatNotificationService
     Task<Result> MarkReadAsync(string fromUserId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Unread direct messages waiting for a host-owned channel. Call this from a trusted background job,
+/// not from a page: it can see every recipient.
+/// </summary>
+public interface IChatDeliveryQueue
+{
+    Task<IReadOnlyList<ChatPendingNotice>> ListPendingAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default);
+
+    Task MarkDeliveredAsync(IReadOnlyCollection<int> noticeIds, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The host's user store. EasyChatz never authenticates; it only asks who someone is.</summary>
 public interface IChatUserDirectory
 {
@@ -68,4 +79,7 @@ public interface IChatRealtime
     Task PublishRoomUpdatedAsync(ChatRoomUpdatedDto room, CancellationToken cancellationToken = default);
 
     Task PublishRoomRemovedAsync(ChatRoomRemovedDto room, CancellationToken cancellationToken = default);
+
+    /// <summary>Tells layout badges that <paramref name="userId"/>'s unread count changed.</summary>
+    Task PublishUnreadChangedAsync(string userId, CancellationToken cancellationToken = default);
 }

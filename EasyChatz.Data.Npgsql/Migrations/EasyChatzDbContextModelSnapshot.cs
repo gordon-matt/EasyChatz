@@ -110,6 +110,9 @@ namespace EasyChatz.Data.Npgsql.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("FromUserId")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -128,6 +131,8 @@ namespace EasyChatz.Data.Npgsql.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ChatMessageId");
+
+                    b.HasIndex("IsRead", "DeliveredAtUtc");
 
                     b.HasIndex("ToUserId", "FromUserId", "IsRead");
 

@@ -71,6 +71,13 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
             return;
         }
 
+        await Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
+        if (IsWatching())
+        {
+            await base.OnConnectedAsync();
+            return;
+        }
+
         var person = await directory.FindAsync(userId);
         bool administrator = person?.IsAdministrator == true
             || Context.User?.IsInRole("Administrator") == true
@@ -85,7 +92,6 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
             Connections[Context.ConnectionId] = new Connection(presence);
         }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
         await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, existing);
         await Clients.Others.SendAsync(Constants.HubEvents.AddUser, presence);
         await base.OnConnectedAsync();
@@ -106,6 +112,12 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
         }
 
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private bool IsWatching()
+    {
+        var http = Context.GetHttpContext();
+        return http?.Request.Query.TryGetValue(Constants.WatchQueryName, out var value) == true && value == "1";
     }
 
     private sealed class Connection(ChatPresenceDto user)

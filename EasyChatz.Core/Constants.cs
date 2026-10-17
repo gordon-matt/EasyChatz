@@ -12,6 +12,9 @@ public static class Constants
 
     public const string DefaultHubPath = "/chathub";
 
+    /// <summary>Query flag for a connection that only listens for unread changes and does not join presence.</summary>
+    public const string WatchQueryName = "watch";
+
     public const string AnnouncementsRoomName = "Announcements";
 
     /// <summary>Owner of the seeded Announcements room. Not a real account.</summary>
@@ -64,6 +67,7 @@ public static class Constants
         public const string AddUser = "addUser";
         public const string RemoveUser = "removeUser";
         public const string Error = "chatError";
+        public const string UnreadChanged = "unreadChanged";
     }
 
     public static class DatabaseProviders

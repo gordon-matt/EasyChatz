@@ -22,9 +22,9 @@ EasyChatz does not authenticate anyone. The host already has accounts. Register 
 | `EasyChatz.Data.Sql` | SQL Server. Register it with `AddEasyChatzSqlServer()`. |
 | `EasyChatz.Data.Npgsql` | PostgreSQL. Register it with `AddEasyChatzNpgsql()`. |
 | `EasyChatz.Data.MySql` | MySQL (Oracle's provider). Register it with `AddEasyChatzMySql()`. |
-| `EasyChatz.Services` | Room and message rules, unread notifications, and the Extenso repositories. |
+| `EasyChatz.Services` | Room and message rules, unread notifications, the delivery queue, and the Extenso repositories. |
 | `EasyChatz.AspNetCore` | `AddEasyChatz()`, `MapEasyChatzApi()`, and `MapEasyChatzHub()`. |
-| `EasyChatz.Components` | The `Chat` Razor component, its JavaScript and CSS, and an HTTP client for WebAssembly. |
+| `EasyChatz.Components` | The `Chat` and `ChatUnreadBadge` Razor components, their JavaScript and CSS, and an HTTP client for WebAssembly. |
 | `EasyChatz.CustomElements` | A Blazor WebAssembly app that registers `<ec-chat>` for React and plain HTML. |
 | `EasyChatz.Tests` | xUnit tests for rooms, announcements, direct messages, and paging. |
 | `EasyChatz.Demo.*` | Blazor, MVC, and React demos. |
@@ -102,7 +102,7 @@ Add the stylesheet to `App.razor`, and `@using EasyChatz.Components` to `_Import
 
 The component must render interactively. In Blazor WebAssembly, call `AddEasyChatzHttpClient(apiBaseUrl, hubUrl)` instead of `AddEasyChatz`, and host the API and hub in a server project.
 
-Parameters: `Theme` (`light`, `dark`, `auto`, `bootstrap`), `Height`, `Class`, `ShowPeople`, `OnConversationChanged`, and `OnMessage`. Other attributes are passed to the outer element.
+Parameters: `Theme` (`light`, `dark`, `auto`, `bootstrap`), `Height`, `Class`, `ShowPeople`, `OnConversationChanged`, `OnMessage`, `WithUserId`, `OnOpenUser`, `OpenUserText`, and `MaxLength`. Other attributes are passed to the outer element. See [Integrating with the host](#integrating-with-the-host) for the ones a host uses to connect chat to the rest of its app.
 
 ### MVC
 
@@ -173,19 +173,104 @@ app.MapEasyChatzHub().RequireAuthorization().RequireCors("EasyChatz");
 
 `IncludeCredentials` sends the cookie on JSON calls and on the SignalR connection. For bearer tokens, add your own handler through the `configureClient` argument of `AddEasyChatzHttpClient`.
 
+## Integrating with the host
+
+EasyChatz keeps its own rooms, messages, and notifications in the `chatz` schema. It does not keep accounts, profile pages, or an email sender. The hooks below are how a host connects those.
+
+### Directory
+
+`IChatUserDirectory` is required for a real app. `ChatUser` is `(Id, DisplayName, IsAdministrator, CanCreateRooms)`.
+
+- `Id` is the host's user id, the same value as `ClaimTypes.NameIdentifier`.
+- `DisplayName` is whatever the host wants shown. A family app might use a person's name and fall back to the account name.
+- `IsAdministrator` matches the host's administrator role.
+- `CanCreateRooms` is who may create a room. Set it for administrators and anyone else the host allows, such as editors. The `ec-rooms` claim does the same job when the directory does not.
+
+Register the directory before `AddEasyChatz()`.
+
+### Open a direct message
+
+`WithUserId` opens that conversation when the component loads, and again whenever the value changes. Use it for a link such as "Message this person":
+
+```razor
+<Chat WithUserId="@UserId" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "withUser")]
+    private string? UserId { get; set; }
+}
+```
+
+The id has to be one the directory can find. If it cannot, the component shows the directory's not-found message.
+
+### Open someone from the online list
+
+`OnOpenUser` adds a button next to Message. The button is hidden when nothing is listening. `OpenUserText` defaults to `Open`.
+
+```razor
+<Chat OnOpenUser="OpenUser" OpenUserText="View profile" />
+
+@code {
+    private void OpenUser(ChatPresenceDto person) =>
+        Navigation.NavigateTo($"/people/{person.UserId}");
+}
+```
+
+`ChatPresenceDto` has the connection id, user id, display name, and administrator flag. It does not have a profile URL. The host decides where the button goes.
+
+### Unread count in the layout
+
+`ChatUnreadBadge` shows how many direct messages the signed-in user has not opened. Drop it in a nav link. It renders nothing when the count is zero.
+
+```razor
+<a href="/chat">Messages <ChatUnreadBadge /></a>
+```
+
+The badge calls `IChatNotificationService.GetUnreadAsync` and then listens on the chat hub. It connects with `?watch=1`, joins that user's group, and does not appear in the online list. Opening a conversation marks those notices read and pushes `unreadChanged`, so a badge elsewhere on the site drops without a refresh. `Theme` and `Class` match the chat component.
+
+The badge needs the same `EasyChatzApiAddress` and hub mapping as `Chat`. It is a second SignalR connection, not a second copy of the chat UI.
+
+### Hand unread messages to email or push
+
+`IChatDeliveryQueue` is for a trusted background job. It is not mapped on the HTTP API, because it can see every recipient.
+
+```csharp
+public sealed class UnreadMessageJob(IChatDeliveryQueue queue, IEmailSender email)
+{
+    public async Task SendAsync(CancellationToken cancellationToken)
+    {
+        var pending = await queue.ListPendingAsync(DateTime.UtcNow.AddMinutes(-30), cancellationToken);
+        foreach (var notice in pending)
+        {
+            await email.SendAsync(notice.ToUserId, notice.FromUserId, notice.Content, cancellationToken);
+        }
+
+        await queue.MarkDeliveredAsync(pending.Select(notice => notice.Id).ToArray(), cancellationToken);
+    }
+}
+```
+
+`ListPendingAsync` returns notices that are still unread, have no `DeliveredAtUtc`, and were created at or before the time you pass. Each `ChatPendingNotice` has `Id`, `MessageId`, `FromUserId`, `ToUserId`, `Content`, and `CreatedAtUtc`. `MarkDeliveredAsync` sets `DeliveredAtUtc`. It does not mark the conversation read, so the badge still shows until the recipient opens it.
+
+Pass a time in the past when the host wants to wait before sending. Pass a time in the future to take everything that is waiting.
+
+### Composer length
+
+`MaxLength` caps the text box. The server still rejects anything over `EasyChatz:MaxMessageLength`, which defaults to 2000 and cannot be set higher than that. Set both to the same number when the host wants a shorter limit.
+
 ## Behaviour
 
 - Room messages are saved by the service, then broadcast to a SignalR group named after the room.
 - Direct messages are sent only through the hub (`SendPrivate`). The HTTP API does not accept them. Each one creates an unread notification for the recipient.
 - Messages are paged with `take` (1–200, default 50) and `beforeId`. Pages come back oldest first.
-- Markup is stripped. A message longer than 2000 characters, or a room name longer than 100, is rejected.
+- Markup is stripped. A message longer than `MaxMessageLength` (default 2000), or a room name longer than 100, is rejected. The composer can be capped lower with the `MaxLength` parameter.
 - Announcements cannot be renamed or deleted, and its name is reserved. Only an administrator can post there.
 - A room can be renamed by its administrator and deleted by its owner or an administrator. The person who created it is the room administrator.
 - A message can be deleted by the person who sent it.
-- Opening a direct conversation marks that sender's notifications read.
+- Opening a direct conversation marks that sender's notifications read and pushes `unreadChanged` to that user's connections.
 - Writes to the HTTP API require the header `X-EasyChatz: 1`. GET and HEAD are exempt. In-process Blazor Server and MVC do not go through that header.
 
-The hub raises `newMessage`, `newPrivateMessage`, `removeChatMessage`, `addChatRoom`, `updateChatRoom`, `removeChatRoom`, `onRoomDeleted`, `setOnlineUsers`, `addUser`, `removeUser`, and `chatError`.
+The hub raises `newMessage`, `newPrivateMessage`, `removeChatMessage`, `addChatRoom`, `updateChatRoom`, `removeChatRoom`, `onRoomDeleted`, `setOnlineUsers`, `addUser`, `removeUser`, `unreadChanged`, and `chatError`. A connection opened with `?watch=1` receives `newPrivateMessage` and `unreadChanged` only, and is left out of presence.
 
 ## Demos
 

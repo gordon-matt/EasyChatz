@@ -101,6 +101,9 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("FromUserId")
                         .IsRequired()
                         .HasMaxLength(450)
@@ -119,6 +122,8 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ChatMessageId");
+
+                    b.HasIndex("IsRead", "DeliveredAtUtc");
 
                     b.HasIndex("ToUserId", "FromUserId", "IsRead");
 

@@ -27,7 +27,9 @@ public static class ServiceCollectionExtensions
             services.TryAddScoped<IChatUserDirectory, FallbackChatUserDirectory>();
             services.TryAddScoped<IChatCurrentUser, UnauthenticatedChatUser>();
             services.TryAddScoped<IChatService, ChatService>();
-            services.TryAddScoped<IChatNotificationService, ChatNotificationService>();
+            services.TryAddScoped<ChatNotificationService>();
+            services.TryAddScoped<IChatNotificationService>(sp => sp.GetRequiredService<ChatNotificationService>());
+            services.TryAddScoped<IChatDeliveryQueue>(sp => sp.GetRequiredService<ChatNotificationService>());
 
             services.AddHostedService<Hosting.EasyChatzDatabaseInitializer>();
             return services;

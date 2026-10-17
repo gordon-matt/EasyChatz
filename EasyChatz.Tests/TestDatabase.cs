@@ -73,6 +73,8 @@ public sealed class TestDatabase : IAsyncDisposable
 
     public IChatNotificationService Notifications => scope.ServiceProvider.GetRequiredService<IChatNotificationService>();
 
+    public IChatDeliveryQueue Delivery => scope.ServiceProvider.GetRequiredService<IChatDeliveryQueue>();
+
     public static async Task<TestDatabase> CreateAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

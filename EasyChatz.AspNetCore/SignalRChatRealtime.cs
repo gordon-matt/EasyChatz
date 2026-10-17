@@ -55,6 +55,9 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
     public Task PublishRoomUpdatedAsync(ChatRoomUpdatedDto room, CancellationToken cancellationToken = default) =>
         hub.Clients.All.SendAsync(Constants.HubEvents.UpdateRoom, room, cancellationToken);
 
+    public Task PublishUnreadChangedAsync(string userId, CancellationToken cancellationToken = default) =>
+        UserAsync(userId, Constants.HubEvents.UnreadChanged, new { userId }, cancellationToken);
+
     public async Task PublishRoomRemovedAsync(ChatRoomRemovedDto room, CancellationToken cancellationToken = default)
     {
         await hub.Clients.Group(room.RoomName).SendAsync(Constants.HubEvents.RoomDeleted, room, cancellationToken);
