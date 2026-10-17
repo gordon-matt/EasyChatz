@@ -52,7 +52,7 @@
                                 <span class="ec-nav-title">@room.Name</span>
                                 <span class="ec-nav-meta">@room.AdminDisplayName</span>
                             </span>
-                            @if (unread > 0)
+                            @if (unread > 0 && !active)
                             {
                                 <span class="ec-badge">@unread</span>
                             }
@@ -72,7 +72,7 @@
                             <span class="ec-nav-copy">
                                 <span class="ec-nav-title">@conversation.DisplayName</span>
                             </span>
-                            @if (conversation.UnreadCount > 0)
+                            @if (conversation.UnreadCount > 0 && !active)
                             {
                                 <span class="ec-badge">@conversation.UnreadCount</span>
                             }

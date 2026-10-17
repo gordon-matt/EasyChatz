@@ -24,7 +24,9 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private ElementReference root;
     private ElementReference scroller;
     private ElementReference composer;
+    private bool composerBound;
     private bool connected;
+    private bool disposed;
     private bool peopleOpen;
     private bool newRoomOpen;
     private bool renameOpen;
@@ -127,40 +129,39 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (!ReadOnlyThread && (activeRoom is not null || activeConversation is not null))
+        if (!composerBound && !ReadOnlyThread && (activeRoom is not null || activeConversation is not null))
         {
-            try
-            {
-                await module.InvokeVoidAsync("bindComposer", sessionId, composer);
-            }
-            catch (JSException)
-            {
-                // The hub is still connecting, or the box was redrawn. The next render tries again.
-            }
+            composerBound = await InvokeQuietlyAsync("bindComposer", sessionId, composer);
         }
 
         if (scrollPending)
         {
             scrollPending = false;
-            await module.InvokeVoidAsync("scrollToEnd", scroller);
+            await InvokeQuietlyAsync("scrollToEnd", scroller);
         }
 
         if (restoreFromHeight is int previous)
         {
             restoreFromHeight = null;
-            await module.InvokeVoidAsync("restoreHeight", scroller, previous);
+            await InvokeQuietlyAsync("restoreHeight", scroller, previous);
         }
     }
 
     private async Task ConnectAsync()
     {
-        module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/EasyChatz.Components/easychatz.js");
-        self = DotNetObjectReference.Create(this);
-        await module.InvokeVoidAsync("connect", sessionId, Address.HubUrl, Address.IncludeCredentials, self);
-        connected = true;
-        if (activeRoom is not null)
+        try
         {
-            await module.InvokeVoidAsync("join", sessionId, activeRoom.Name);
+            module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/EasyChatz.Components/easychatz.js");
+            self = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("connect", sessionId, Address.HubUrl, Address.IncludeCredentials, self);
+            connected = true;
+            if (activeRoom is not null)
+            {
+                await InvokeQuietlyAsync("join", sessionId, activeRoom.Name);
+            }
+        }
+        catch (Exception ex) when (IsBrowserGone(ex))
+        {
         }
     }
 
@@ -201,13 +202,14 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     {
         activeRoom = room;
         activeConversation = null;
+        composerBound = false;
         roomUnread.Remove(room.Id);
         error = null;
         messages.Clear();
         await LoadMessagesAsync(beforeId: null, older: false);
         if (connected && module is not null)
         {
-            await module.InvokeVoidAsync("join", sessionId, room.Name);
+            await InvokeQuietlyAsync("join", sessionId, room.Name);
         }
 
         await ReloadConversationsAsync();
@@ -218,6 +220,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     {
         activeConversation = conversation;
         activeRoom = null;
+        composerBound = false;
         error = null;
         messages.Clear();
         await Notifications.MarkReadAsync(conversation.UserId);
@@ -344,9 +347,12 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             EnsureConversation(activeConversation.UserId, activeConversation.DisplayName);
             await OnMessage.InvokeAsync(sent);
         }
-        catch (JSException)
+        catch (Exception ex) when (ex is JSException or OperationCanceledException)
         {
-            error = "The message could not be sent.";
+            if (!disposed)
+            {
+                error = "The message could not be sent.";
+            }
         }
         finally
         {
@@ -363,7 +369,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
 
         await SendAsync();
-        await InvokeAsync(StateHasChanged);
+        await RenderAsync();
     }
 
     private Task OnComposerKeyDown(KeyboardEventArgs args) =>
@@ -475,7 +481,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
 
         await OnMessage.InvokeAsync(message);
-        await InvokeAsync(StateHasChanged);
+        await RenderAsync();
     }
 
     [JSInvokable]
@@ -501,11 +507,14 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         {
             AddMessage(message);
             scrollPending = true;
+            if (!mine)
+            {
+                ClearUnread(partnerId);
+                await Notifications.MarkReadAsync(partnerId);
+            }
         }
-
-        if (!mine)
+        else if (!mine)
         {
-            // Leave the badge in place until the conversation is opened, so switching away still shows the reply.
             BumpConversation(partnerId, message.FromDisplayName);
         }
         else
@@ -514,7 +523,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
 
         await OnMessage.InvokeAsync(message);
-        await InvokeAsync(StateHasChanged);
+        await RenderAsync();
     }
 
     [JSInvokable]
@@ -524,7 +533,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (removed is not null)
         {
             messages.RemoveAll(m => m.Id == removed.MessageId);
-            return InvokeAsync(StateHasChanged);
+            return RenderAsync();
         }
 
         return Task.CompletedTask;
@@ -537,7 +546,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (room is not null)
         {
             UpsertRoom(room);
-            return InvokeAsync(StateHasChanged);
+            return RenderAsync();
         }
 
         return Task.CompletedTask;
@@ -555,10 +564,10 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         ApplyRename(room);
         if (activeRoom?.Id == room.Id && module is not null && !string.Equals(room.PreviousName, room.Name, StringComparison.Ordinal))
         {
-            await module.InvokeVoidAsync("join", sessionId, room.Name);
+            await InvokeQuietlyAsync("join", sessionId, room.Name);
         }
 
-        await InvokeAsync(StateHasChanged);
+        await RenderAsync();
     }
 
     [JSInvokable]
@@ -568,7 +577,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (room is not null)
         {
             RemoveRoom(room.RoomId);
-            return InvokeAsync(StateHasChanged);
+            return RenderAsync();
         }
 
         return Task.CompletedTask;
@@ -587,7 +596,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             online.AddRange(people);
         }
 
-        return InvokeAsync(StateHasChanged);
+        return RenderAsync();
     }
 
     [JSInvokable]
@@ -597,7 +606,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (person is not null && online.All(p => p.ConnectionId != person.ConnectionId))
         {
             online.Add(person);
-            return InvokeAsync(StateHasChanged);
+            return RenderAsync();
         }
 
         return Task.CompletedTask;
@@ -610,7 +619,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (person is not null)
         {
             online.RemoveAll(p => p.ConnectionId == person.ConnectionId);
-            return InvokeAsync(StateHasChanged);
+            return RenderAsync();
         }
 
         return Task.CompletedTask;
@@ -620,7 +629,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     public Task OnHubError(string message)
     {
         error = string.IsNullOrWhiteSpace(message) ? "Something went wrong." : message;
-        return InvokeAsync(StateHasChanged);
+        return RenderAsync();
     }
 
     private void AddMessage(ChatMessageDto message)
@@ -692,6 +701,22 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         conversations.Insert(0, new ChatConversationDto(userId, string.IsNullOrWhiteSpace(displayName) ? userId : displayName, 0));
     }
 
+    private void ClearUnread(string userId)
+    {
+        int index = conversations.FindIndex(c => string.Equals(c.UserId, userId, StringComparison.Ordinal));
+        if (index < 0 || conversations[index].UnreadCount == 0)
+        {
+            return;
+        }
+
+        var cleared = conversations[index] with { UnreadCount = 0 };
+        conversations[index] = cleared;
+        if (string.Equals(activeConversation?.UserId, userId, StringComparison.Ordinal))
+        {
+            activeConversation = cleared;
+        }
+    }
+
     private void ReplaceConversation(ChatConversationDto conversation)
     {
         int index = conversations.FindIndex(c => string.Equals(c.UserId, conversation.UserId, StringComparison.Ordinal));
@@ -708,13 +733,47 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     private async Task PublishConversationAsync(ChatConversationEvent conversation)
     {
-        if (module is not null)
-        {
-            await module.InvokeVoidAsync("raise", root, Constants.DomEvents.Conversation, conversation);
-        }
-
+        // The DOM event is for MVC and React. A canceled browser call must not fail the click that opened the chat.
+        await InvokeQuietlyAsync("raise", root, Constants.DomEvents.Conversation, conversation);
         await OnConversationChanged.InvokeAsync(conversation);
     }
+
+    private async Task<bool> InvokeQuietlyAsync(string identifier, params object?[] args)
+    {
+        if (disposed || module is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            await module.InvokeVoidAsync(identifier, args);
+            return true;
+        }
+        catch (Exception ex) when (IsBrowserGone(ex))
+        {
+            return false;
+        }
+    }
+
+    private async Task RenderAsync()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex) when (IsBrowserGone(ex))
+        {
+        }
+    }
+
+    private static bool IsBrowserGone(Exception ex) =>
+        ex is JSDisconnectedException or JSException or OperationCanceledException or ObjectDisposedException;
 
     private static T? Read<T>(string? json, JsonTypeInfo<T> type) =>
         string.IsNullOrWhiteSpace(json) || json == "null" ? default : JsonSerializer.Deserialize(json, type);
@@ -740,6 +799,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        disposed = true;
         try
         {
             if (module is not null)
