@@ -1,0 +1,25 @@
+@page "/"
+@rendermode InteractiveServer
+
+<div class="demo-toolbar">
+    <h1>Messages</h1>
+    <label>
+        Theme
+        <select @bind="theme">
+            <option value="auto">Auto</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+        </select>
+    </label>
+</div>
+
+<Chat Theme="@theme" Height="calc(100vh - 150px)" />
+
+<p class="demo-muted">
+    Open this page in a second browser, sign in as someone else, and the messages arrive live.
+    Alex is the administrator, so only Alex can post in Announcements.
+</p>
+
+@code {
+    private string theme = "auto";
+}

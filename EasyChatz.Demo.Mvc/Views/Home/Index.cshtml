@@ -1,0 +1,21 @@
+@{
+    ViewData["Title"] = "Messages";
+}
+
+<div class="demo-toolbar">
+    <h1>Messages</h1>
+</div>
+
+<component type="typeof(Chat)" render-mode="Server" param-Height="@("calc(100vh - 170px)")" param-Theme="@("auto")" />
+
+<p id="demo-status" class="demo-muted">Sign in, then open a room. This page hears <code>ec-conversation</code> from the component.</p>
+
+@section Scripts {
+    <script>
+        document.addEventListener('ec-conversation', event => {
+            const conversation = event.detail;
+            document.getElementById('demo-status').textContent =
+                `Opened ${conversation.kind}: ${conversation.name}`;
+        });
+    </script>
+}

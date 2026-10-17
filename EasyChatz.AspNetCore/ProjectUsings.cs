@@ -1,0 +1,9 @@
+global using Ardalis.Result;
+global using EasyChatz.Models;
+global using EasyChatz.Services;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.SignalR;
+global using Microsoft.AspNetCore.Http;
+global using Microsoft.AspNetCore.Routing;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.DependencyInjection.Extensions;

@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Data/">
+    <Project Path="EasyChatz.Data/EasyChatz.Data.csproj" />
+    <Project Path="EasyChatz.Data.MySql/EasyChatz.Data.MySql.csproj" />
+    <Project Path="EasyChatz.Data.Npgsql/EasyChatz.Data.Npgsql.csproj" />
+    <Project Path="EasyChatz.Data.Sql/EasyChatz.Data.Sql.csproj" />
+    <Project Path="EasyChatz.Data.Sqlite/EasyChatz.Data.Sqlite.csproj" />
+  </Folder>
+  <Folder Name="/Demos/">
+    <Project Path="EasyChatz.Demo.Blazor/EasyChatz.Demo.Blazor.csproj" />
+    <Project Path="EasyChatz.Demo.Mvc/EasyChatz.Demo.Mvc.csproj" />
+    <Project Path="easychatz.demo.react/easychatz.demo.react.esproj">
+      <Build />
+      <Deploy />
+    </Project>
+  </Folder>
+  <Project Path="EasyChatz.Core/EasyChatz.Core.csproj" />
+  <Project Path="EasyChatz.Services/EasyChatz.Services.csproj" />
+  <Project Path="EasyChatz.AspNetCore/EasyChatz.AspNetCore.csproj" />
+  <Project Path="EasyChatz.Components/EasyChatz.Components.csproj" />
+  <Project Path="EasyChatz.CustomElements/EasyChatz.CustomElements.csproj" />
+  <Project Path="EasyChatz.Tests/EasyChatz.Tests.csproj" />
+</Solution>

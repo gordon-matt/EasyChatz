@@ -1,0 +1,18 @@
+<AuthorizeView>
+    <Authorized>
+        <span class="demo-user">@context.User.Identity?.Name</span>
+        <form method="post" action="account/sign-out" data-enhance="false">
+            <button type="submit">Sign out</button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <span class="demo-user">Sign in as</span>
+        @foreach (var user in DemoUsers.All)
+        {
+            <form method="post" action="account/sign-in" data-enhance="false">
+                <input type="hidden" name="userId" value="@user.Id" />
+                <button type="submit" title="@(user.IsAdministrator ? "Administrator" : "Member")">@user.DisplayName</button>
+            </form>
+        }
+    </NotAuthorized>
+</AuthorizeView>

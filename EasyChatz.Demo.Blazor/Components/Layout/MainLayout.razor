@@ -1,0 +1,18 @@
+@inherits LayoutComponentBase
+
+<div class="demo-shell">
+    <header class="demo-nav">
+        <a class="demo-brand" href="">EasyChatz <span>Blazor demo</span></a>
+        <nav>
+            <NavLink href="" Match="NavLinkMatch.All">Chat</NavLink>
+        </nav>
+        <UserSwitcher />
+    </header>
+    <main class="demo-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Something went wrong. <a href="." class="reload">Reload</a>
+</div>

@@ -1,0 +1,244 @@
+@using EasyChatz.Components.Http
+@implements IAsyncDisposable
+
+<div class="ec-root @Class" data-theme="@Theme" data-ec-root @ref="root" @attributes="AdditionalAttributes">
+    <div class="ec-shell" style="height: @Height">
+        @if (me is null)
+        {
+            <div class="ec-gate">
+                <Icon Name="message" />
+                <h2>Sign in to chat</h2>
+                <p>@(error ?? "Choose an account and this conversation will open here.")</p>
+            </div>
+        }
+        else
+        {
+            <aside class="ec-sidebar">
+                <div class="ec-sidebar-head">
+                    <strong>Chat</strong>
+                    <span class="ec-spacer"></span>
+                    @if (ShowPeople)
+                    {
+                        <button type="button" class="ec-icon-button" title="People online" aria-pressed="@peopleOpen" @onclick="() => peopleOpen = !peopleOpen">
+                            <Icon Name="users" />
+                        </button>
+                    }
+                    @if (me.CanCreateRooms)
+                    {
+                        <button type="button" class="ec-icon-button" title="New room" @onclick="OpenNewRoom">
+                            <Icon Name="plus" />
+                        </button>
+                    }
+                </div>
+                <label class="ec-search">
+                    <input type="search" placeholder="Filter" aria-label="Filter conversations" @bind="filter" @bind:event="oninput" />
+                </label>
+
+                <div class="ec-nav">
+                    <p class="ec-nav-label">Rooms</p>
+                    @if (!VisibleRooms.Any())
+                    {
+                        <p class="ec-empty">No rooms yet.</p>
+                    }
+                    @foreach (var room in VisibleRooms)
+                    {
+                        bool active = activeRoom?.Id == room.Id;
+                        int unread = roomUnread.GetValueOrDefault(room.Id);
+                        <button type="button" class="ec-nav-item @(active ? "ec-active" : null)" @onclick="() => OpenRoomAsync(room)">
+                            <span class="ec-avatar ec-avatar-room">
+                                <Icon Name="@(IsAnnouncements(room) ? "megaphone" : "hash")" />
+                            </span>
+                            <span class="ec-nav-copy">
+                                <span class="ec-nav-title">@room.Name</span>
+                                <span class="ec-nav-meta">@room.AdminDisplayName</span>
+                            </span>
+                            @if (unread > 0)
+                            {
+                                <span class="ec-badge">@unread</span>
+                            }
+                        </button>
+                    }
+
+                    <p class="ec-nav-label">Direct messages</p>
+                    @if (!VisibleConversations.Any())
+                    {
+                        <p class="ec-empty">No direct messages yet.</p>
+                    }
+                    @foreach (var conversation in VisibleConversations)
+                    {
+                        bool active = activeConversation?.UserId == conversation.UserId;
+                        <button type="button" class="ec-nav-item @(active ? "ec-active" : null)" @onclick="() => OpenConversationAsync(conversation)">
+                            <span class="ec-avatar">@Initials(conversation.DisplayName)</span>
+                            <span class="ec-nav-copy">
+                                <span class="ec-nav-title">@conversation.DisplayName</span>
+                            </span>
+                            @if (conversation.UnreadCount > 0)
+                            {
+                                <span class="ec-badge">@conversation.UnreadCount</span>
+                            }
+                        </button>
+                    }
+                </div>
+            </aside>
+
+            <section class="ec-thread">
+                @if (activeRoom is null && activeConversation is null)
+                {
+                    <div class="ec-gate">
+                        <Icon Name="message" />
+                        <h2>Pick a conversation</h2>
+                        <p>Rooms are open to everyone. Direct messages stay between the two of you.</p>
+                    </div>
+                }
+                else
+                {
+                    <header class="ec-thread-head">
+                        <span class="ec-avatar @(activeRoom is not null ? "ec-avatar-room" : null)">
+                            @if (activeRoom is not null)
+                            {
+                                <Icon Name="@(IsAnnouncements(activeRoom) ? "megaphone" : "hash")" />
+                            }
+                            else
+                            {
+                                @Initials(activeConversation!.DisplayName)
+                            }
+                        </span>
+                        <div class="ec-thread-title">
+                            <strong>@(activeRoom?.Name ?? activeConversation!.DisplayName)</strong>
+                            <span>@(activeRoom is not null ? $"Started by {activeRoom.AdminDisplayName}" : "Direct message")</span>
+                        </div>
+                        <span class="ec-spacer"></span>
+                        @if (CanRename)
+                        {
+                            <button type="button" class="ec-icon-button" title="Rename room" @onclick="OpenRename"><Icon Name="pencil" /></button>
+                        }
+                        @if (CanDeleteRoom)
+                        {
+                            <button type="button" class="ec-icon-button" title="Delete room" @onclick="() => confirmDelete = true"><Icon Name="trash" /></button>
+                        }
+                    </header>
+
+                    @if (!string.IsNullOrEmpty(error))
+                    {
+                        <p class="ec-alert" role="alert">@error</p>
+                    }
+
+                    <div class="ec-messages" @ref="scroller" @onscroll="OnScrollAsync">
+                        @{ DateTime? previousDay = null; }
+                        @foreach (var message in messages)
+                        {
+                            var local = message.Timestamp.ToLocalTime();
+                            if (previousDay != local.Date)
+                            {
+                                previousDay = local.Date;
+                                <div class="ec-day">@local.ToString("D")</div>
+                            }
+
+                            bool mine = string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal);
+                            <article class="ec-message @(mine ? "ec-mine" : null)">
+                                @if (!mine)
+                                {
+                                    <span class="ec-avatar">@Initials(message.FromDisplayName)</span>
+                                }
+                                <div class="ec-bubble">
+                                    @if (!mine && activeRoom is not null)
+                                    {
+                                        <span class="ec-author">@message.FromDisplayName</span>
+                                    }
+                                    <p>@message.Content</p>
+                                    <time datetime="@message.Timestamp.ToString("o")">@local.ToString("t")</time>
+                                    @if (mine)
+                                    {
+                                        <button type="button" class="ec-icon-button ec-delete" title="Delete message" @onclick="() => DeleteMessageAsync(message.Id)">
+                                            <Icon Name="trash" />
+                                        </button>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+
+                    <form class="ec-composer" @onsubmit="SendAsync" @onsubmit:preventDefault>
+                        @if (ReadOnlyThread)
+                        {
+                            <p class="ec-hint">Only an administrator can post in @activeRoom!.Name.</p>
+                        }
+                        else
+                        {
+                            <textarea @ref="composer" rows="1" maxlength="@MaxMessageLength" placeholder="Write a message" aria-label="Message"
+                                      value="@draft" @oninput="OnDraft"></textarea>
+                            <button type="submit" class="ec-send" disabled="@(!CanSend)" title="Send">
+                                <Icon Name="send" />
+                            </button>
+                        }
+                    </form>
+                }
+            </section>
+
+            @if (ShowPeople && peopleOpen)
+            {
+                <aside class="ec-people">
+                    <div class="ec-sidebar-head">
+                        <strong>Online</strong>
+                        <span class="ec-spacer"></span>
+                        <button type="button" class="ec-icon-button" title="Close" @onclick="() => peopleOpen = false"><Icon Name="x" /></button>
+                    </div>
+                    @if (!OtherPeople.Any())
+                    {
+                        <p class="ec-empty">Nobody else is here right now.</p>
+                    }
+                    @foreach (var person in OtherPeople)
+                    {
+                        <div class="ec-person">
+                            <span class="ec-avatar">@Initials(person.DisplayName)<i class="ec-presence"></i></span>
+                            <span class="ec-nav-title">@person.DisplayName</span>
+                            <button type="button" class="ec-text-button" @onclick="() => MessagePersonAsync(person)">Message</button>
+                        </div>
+                    }
+                </aside>
+            }
+        }
+
+        @if (newRoomOpen)
+        {
+            <div class="ec-modal" @onclick="() => newRoomOpen = false">
+                <form class="ec-dialog" @onclick:stopPropagation="true" @onsubmit="CreateRoomAsync" @onsubmit:preventDefault>
+                    <h3>New room</h3>
+                    <input @bind="newRoomName" @bind:event="oninput" maxlength="@Constants.MaxLengths.RoomName" placeholder="Room name" aria-label="Room name" />
+                    <div class="ec-dialog-actions">
+                        <button type="button" class="ec-text-button" @onclick="() => newRoomOpen = false">Cancel</button>
+                        <button type="submit" class="ec-send" disabled="@string.IsNullOrWhiteSpace(newRoomName)">Create</button>
+                    </div>
+                </form>
+            </div>
+        }
+
+        @if (renameOpen)
+        {
+            <div class="ec-modal" @onclick="() => renameOpen = false">
+                <form class="ec-dialog" @onclick:stopPropagation="true" @onsubmit="RenameRoomAsync" @onsubmit:preventDefault>
+                    <h3>Rename room</h3>
+                    <input @bind="renameName" @bind:event="oninput" maxlength="@Constants.MaxLengths.RoomName" aria-label="Room name" />
+                    <div class="ec-dialog-actions">
+                        <button type="button" class="ec-text-button" @onclick="() => renameOpen = false">Cancel</button>
+                        <button type="submit" class="ec-send">Save</button>
+                    </div>
+                </form>
+            </div>
+        }
+
+        @if (confirmDelete && activeRoom is not null)
+        {
+            <div class="ec-modal" @onclick="() => confirmDelete = false">
+                <form class="ec-dialog" @onclick:stopPropagation="true" @onsubmit="DeleteRoomAsync" @onsubmit:preventDefault>
+                    <h3>Delete @activeRoom.Name?</h3>
+                    <p>Messages in this room are removed for everyone.</p>
+                    <div class="ec-dialog-actions">
+                        <button type="button" class="ec-text-button" @onclick="() => confirmDelete = false">Cancel</button>
+                        <button type="submit" class="ec-danger">Delete</button>
+                    </div>
+                </form>
+            </div>
+        }
+    </div>
+</div>

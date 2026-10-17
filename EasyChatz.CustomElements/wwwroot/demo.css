@@ -1,0 +1,5 @@
+body { margin: 0; background: #f5f6f8; color: #171a21; font: 15px/1.55 system-ui, sans-serif; }
+.site-nav { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 28px; background: #fff; border-bottom: 1px solid #e1e4ea; }
+.site-nav span, .site-nav p { color: #687182; font-size: 13px; font-weight: 500; }
+main { max-width: 1440px; margin: 0 auto; padding: 20px 28px; }
+#status { color: #687182; }

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+		<!-- Ships _framework/blazor.server.js, which .NET 10 only includes in apps with their own .razor files. -->
+		<RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Compile Include="..\EasyChatz.Demo.Blazor\DemoAuth.cs" Link="DemoAuth.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\EasyChatz.AspNetCore\EasyChatz.AspNetCore.csproj" />
+		<ProjectReference Include="..\EasyChatz.Components\EasyChatz.Components.csproj" />
+		<ProjectReference Include="..\EasyChatz.Data.Sqlite\EasyChatz.Data.Sqlite.csproj" />
+	</ItemGroup>
+
+</Project>

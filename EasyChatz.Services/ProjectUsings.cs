@@ -1,0 +1,9 @@
+global using Ardalis.Result;
+global using EasyChatz.Data;
+global using EasyChatz.Data.Entities;
+global using EasyChatz.Models;
+global using Extenso.Data.Entity;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Options;

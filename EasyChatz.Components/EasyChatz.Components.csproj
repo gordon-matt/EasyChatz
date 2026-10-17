@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>EasyChatz.Components</RootNamespace>
+		<Description>Blazor chat UI. Drop it into a Blazor or MVC app, or publish EasyChatz.CustomElements for React.</Description>
+		<IsTrimmable>true</IsTrimmable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<SupportedPlatform Include="browser" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\EasyChatz.Core\EasyChatz.Core.csproj" />
+	</ItemGroup>
+
+</Project>

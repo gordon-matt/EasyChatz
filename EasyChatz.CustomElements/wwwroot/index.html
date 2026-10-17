@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EasyChatz custom element</title>
+    <base href="/" />
+    <link rel="stylesheet" href="_content/EasyChatz.Components/easychatz.css" />
+    <link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+    <header class="site-nav">
+        <strong>EasyChatz <span>plain HTML</span></strong>
+        <p>Sign in on the Blazor demo first so this page can send that cookie.</p>
+    </header>
+    <main>
+        <ec-chat theme="auto" height="70vh"></ec-chat>
+        <p id="status">Open a conversation and this page hears <code>ec-conversation</code>.</p>
+    </main>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        document.addEventListener('ec-conversation', event => {
+            document.getElementById('status').textContent =
+                `Opened ${event.detail.kind}: ${event.detail.name}`;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] ?? "EasyChatz MVC demo")</title>
+    <base href="~/" />
+    <link rel="stylesheet" href="~/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/_content/EasyChatz.Components/easychatz.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="demo-nav">
+        <a class="demo-brand" href="~/">EasyChatz <span>MVC demo</span></a>
+        <nav>
+            <a href="~/">Chat</a>
+        </nav>
+        <div class="demo-users">
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <span class="demo-user">@User.Identity.Name</span>
+                <form method="post" action="~/account/sign-out">
+                    <button type="submit">Sign out</button>
+                </form>
+            }
+            else
+            {
+                <span class="demo-user">Sign in as</span>
+                @foreach (var user in DemoUsers.All)
+                {
+                    <form method="post" action="~/account/sign-in">
+                        <input type="hidden" name="userId" value="@user.Id" />
+                        <button type="submit">@user.DisplayName</button>
+                    </form>
+                }
+            }
+        </div>
+    </header>
+    <main class="demo-main">
+        @RenderBody()
+    </main>
+    <div id="blazor-error-ui">
+        Something went wrong. <a href="" class="reload">Reload</a>
+    </div>
+    <script src="~/_framework/blazor.server.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
