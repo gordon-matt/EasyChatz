@@ -19,7 +19,11 @@ a { color: #2563eb; }
     border-bottom: 1px solid #e1e4ea;
 }
 
-.demo-brand { font-weight: 700; color: inherit; text-decoration: none; font-size: 16px; white-space: nowrap; }
+.demo-brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-weight: 700; color: inherit; text-decoration: none; font-size: 16px; white-space: nowrap;
+}
+.demo-brand img { height: 40px; width: auto; display: block; }
 .demo-brand span, .demo-user { font-weight: 500; color: #687182; font-size: 13px; }
 
 .demo-nav nav { display: flex; gap: 4px; }

@@ -47,7 +47,10 @@ export default function App() {
     return (
         <>
             <header className="demo-nav">
-                <span className="demo-brand">EasyChatz <span>React demo</span></span>
+                <a className="demo-brand" href="/">
+                    <img src="/img/Logo.png" alt="EasyChatz" />
+                    <span>React demo</span>
+                </a>
                 <span className="demo-user">{user ? user.displayName : 'Sign in as'}</span>
                 {user
                     ? <button type="button" onClick={signOut}>Sign out</button>

@@ -1,3 +1,5 @@
+<img src="https://github.com/gordon-matt/EasyChatz/blob/master/_Misc/Logo.png" alt="Logo" width="350px" />
+
 An embeddable chat for .NET 10. It is written in Blazor and also runs in ASP.NET Core MVC, React, or any HTML page through a custom element. Rooms and direct messages are stored in MySQL, PostgreSQL, SQL Server, or SQLite, and live updates go through SignalR.
 
 Features in this version:
