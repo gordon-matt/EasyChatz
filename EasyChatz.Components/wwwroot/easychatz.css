@@ -28,6 +28,11 @@
     line-height: 1.45;
     color: var(--ec-text);
     color-scheme: light;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    container: ec-shell / inline-size;
 }
 
 .ec-root[data-theme="dark"] {
@@ -99,12 +104,12 @@
 
 .ec-shell {
     display: flex;
+    flex: 1;
     min-height: 320px;
     overflow: hidden;
     background: var(--ec-bg);
     border: 1px solid var(--ec-border);
     border-radius: var(--ec-radius);
-    container: ec-shell / inline-size;
 }
 
 .ec-sidebar,
