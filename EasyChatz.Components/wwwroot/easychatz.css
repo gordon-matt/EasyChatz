@@ -104,7 +104,11 @@
 
 .ec-shell {
     display: flex;
-    flex: 1;
+    /* Basis has to be auto so the height property is the flex base size.
+       flex: 1 is basis 0, and an indefinite parent then sizes the shell from its
+       messages: the pane grows with the thread instead of scrolling inside the
+       given height. Firefox and Chromium both do this. */
+    flex: 1 1 auto;
     min-height: 320px;
     overflow: hidden;
     background: var(--ec-bg);
@@ -119,11 +123,12 @@
     width: 280px;
     flex: none;
     min-height: 0;
+    overflow: hidden;
     background: var(--ec-surface);
     border-right: 1px solid var(--ec-border);
 }
 
-.ec-people { border-right: 0; border-left: 1px solid var(--ec-border); width: 240px; }
+.ec-people { border-right: 0; border-left: 1px solid var(--ec-border); width: 240px; overflow: auto; }
 
 .ec-sidebar-head {
     display: flex;
@@ -147,7 +152,7 @@
 }
 .ec-search input:focus { border-color: var(--ec-accent); }
 
-.ec-nav { overflow: auto; padding: 0 8px 12px; min-height: 0; }
+.ec-nav { flex: 1 1 0; overflow: auto; padding: 0 8px 12px; min-height: 0; }
 .ec-nav-label {
     margin: 12px 8px 4px;
     font-size: 11px;
@@ -236,7 +241,7 @@
     text-align: center;
 }
 
-.ec-thread { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.ec-thread { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; overflow: hidden; }
 .ec-thread-head {
     display: flex;
     align-items: center;
@@ -248,7 +253,7 @@
 .ec-thread-title span { color: var(--ec-muted); font-size: 12px; }
 
 .ec-messages {
-    flex: 1;
+    flex: 1 1 0;
     min-height: 0;
     overflow: auto;
     padding: 16px 18px 8px;
