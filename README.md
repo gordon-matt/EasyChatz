@@ -2,6 +2,11 @@
 
 An embeddable chat for .NET 10. It is written in Blazor and also runs in ASP.NET Core MVC, React, or any HTML page through a custom element. Rooms and direct messages are stored in MySQL, PostgreSQL, SQL Server, or SQLite, and live updates go through SignalR.
 
+## Screenshots
+<img src="https://github.com/gordon-matt/EasyChatz/blob/master/_Misc/Screenshots/Light.png" alt="Light Theme" width="100%" />
+
+<img src="https://github.com/gordon-matt/EasyChatz/blob/master/_Misc/Screenshots/Dark.png" alt="Dark Theme" width="100%" />
+
 Features in this version:
 
 - Named rooms, including a seeded Announcements room that only administrators can post in
