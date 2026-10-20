@@ -133,11 +133,19 @@ Parameters are passed as `param-Name`. Event callbacks aren't available this way
 document.addEventListener('ec-conversation', e => console.log(e.detail.kind, e.detail.id, e.detail.name));
 ```
 
-`kind` is `room` or `direct`.
+`kind` is `room` or `private`.
 
 ### React and plain HTML
 
-`EasyChatz.CustomElements` is a WebAssembly app that registers `<ec-chat>`. Publish it, serve its `_framework` and `_content` folders from your site, and give it an `appsettings.json` that points at the API and the hub:
+`EasyChatz.CustomElements` is a Blazor WebAssembly app that registers `<ec-chat>`. It is not a NuGet package and not an npm package. Publish it and serve the static files from the site that hosts the page:
+
+```bash
+dotnet publish EasyChatz.CustomElements -c Release
+```
+
+Copy `wwwroot/_framework` and `wwwroot/_content` from that output so the site serves them at `/_framework` and `/_content`. In a Vite app, put both folders in `public/`. Asset names stay stable between publishes.
+
+The app reads its API and hub addresses from `/appsettings.json` on the page's origin. In Vite that file is `public/appsettings.json`:
 
 ```json
 {
@@ -149,13 +157,64 @@ document.addEventListener('ec-conversation', e => console.log(e.detail.kind, e.d
 }
 ```
 
+A plain page loads the stylesheet and the runtime, then uses the element. The script is a classic script tag, not `type="module"`:
+
 ```html
 <link rel="stylesheet" href="/_content/EasyChatz.Components/easychatz.css" />
-<ec-chat theme="auto" height="640px"></ec-chat>
+<ec-chat theme="auto" height="640px" with-user-id="blair" show-people="true"></ec-chat>
 <script src="/_framework/blazor.webassembly.js"></script>
 ```
 
-Attributes are kebab-case versions of the component parameters, and the same `ec-conversation` event is raised. The React demo has a wrapper component, `src/EasyChatz.jsx`, and a Vite plugin that publishes the custom elements and serves their output, so `npm run dev` is all that's needed. Start the Blazor demo first: the API, the hub, and the sign-in cookie live there.
+Attributes are kebab-case versions of the component parameters. `with-user-id` opens that direct message when the element loads, and again when the attribute changes. `ec-conversation` is a DOM event. `event.detail` is `{ kind, id, name }`. `kind` is `room` or `private`. For a room, `id` is the room id. For a direct message, `id` is the other person's user id.
+
+#### React
+
+Add the same stylesheet and script to `index.html`. The script follows the React module:
+
+```html
+<link rel="stylesheet" href="/_content/EasyChatz.Components/easychatz.css" />
+<div id="root"></div>
+<script type="module" src="/src/main.jsx"></script>
+<script src="/_framework/blazor.webassembly.js"></script>
+```
+
+React does not pass custom-element events through as props. Listen for them on the element. Boolean parameters are HTML attributes, so pass `"true"` and `"false"`:
+
+```jsx
+import { useEffect, useRef } from 'react'
+
+export function Chat({
+  theme = 'auto', height = '640px', withUserId, showPeople = true,
+  maxLength, onConversation,
+}) {
+  const ref = useRef(null)
+  const handler = useRef(onConversation)
+
+  useEffect(() => {
+    handler.current = onConversation
+  })
+
+  useEffect(() => {
+    const element = ref.current
+    const conversation = event => handler.current?.(event.detail)
+    element.addEventListener('ec-conversation', conversation)
+    return () => element.removeEventListener('ec-conversation', conversation)
+  }, [])
+
+  return (
+    <ec-chat
+      ref={ref}
+      theme={theme}
+      height={height}
+      with-user-id={withUserId}
+      show-people={String(showPeople)}
+      max-length={maxLength}
+    />
+  )
+}
+```
+
+`onConversation` receives `{ kind, id, name }`. The React demo's `src/EasyChatz.jsx` listens for that event the same way. Its Vite plugin publishes the custom-element app and copies `_framework` and `_content` into the build, so `npm run dev` is enough inside that demo. Another React app copies those folders itself. Start the API and the hub before the page. The sign-in cookie is issued by that host.
 
 When the API is on another origin, it needs a CORS policy that allows credentials. Writes send an `X-EasyChatz` header, so that header must be allowed:
 
