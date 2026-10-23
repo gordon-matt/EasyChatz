@@ -398,6 +398,7 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
-
 # Demo databases
 App_Data/
+
+NuGet-Push.ps1

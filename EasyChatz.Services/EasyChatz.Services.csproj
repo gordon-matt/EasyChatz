@@ -5,6 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<Description>Services behind EasyChatz: rooms, direct messages and unread notifications.</Description>
+		<Version>1.0.1</Version>
 	</PropertyGroup>
 
 	<ItemGroup>
