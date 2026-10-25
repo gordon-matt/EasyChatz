@@ -102,7 +102,7 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
 
     private async Task RefreshAsync()
     {
-        var unread = await Notifications.GetUnreadAsync();
-        Count = unread.IsSuccess && unread.Value is not null ? unread.Value.Sum(item => item.UnreadCount) : 0;
+        var unread = await Notifications.CountUnreadAsync();
+        Count = unread.IsSuccess ? unread.Value : 0;
     }
 }

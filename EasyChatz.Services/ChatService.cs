@@ -199,8 +199,23 @@ public sealed partial class ChatService(
             ToRoomId = room.Id,
         }, ContextOptions.ForCancellationToken(cancellationToken));
 
+        var mentioned = ChatMentions.UserIds(saved.Content)
+            .Where(id => !string.Equals(id, actor.Value.Id, StringComparison.Ordinal))
+            .ToList();
+        foreach (string userId in mentioned)
+        {
+            await notifications.CreateAsync(saved.Id, actor.Value.Id, userId, cancellationToken);
+            await realtime.PublishUnreadChangedAsync(userId, cancellationToken);
+        }
+
         var dto = ToMessage(saved, actor.Value.DisplayName, room.Name);
         await realtime.PublishRoomMessageAsync(dto, cancellationToken);
+        if (mentioned.Count > 0)
+        {
+            // The room broadcast only reaches people who have that room open.
+            await realtime.PublishMentionAsync(dto, mentioned, cancellationToken);
+        }
+
         return Result<ChatMessageDto>.Success(dto);
     }
 

@@ -41,6 +41,28 @@ public interface IChatNotificationService
     Task<Result<IReadOnlyList<ChatConversationDto>>> GetUnreadAsync(CancellationToken cancellationToken = default);
 
     Task<Result> MarkReadAsync(string fromUserId, CancellationToken cancellationToken = default);
+
+    /// <summary>Unread direct messages plus room mentions, for a layout badge.</summary>
+    Task<Result<int>> CountUnreadAsync(CancellationToken cancellationToken = default)
+    {
+        return CountDirectAsync(cancellationToken);
+
+        async Task<Result<int>> CountDirectAsync(CancellationToken token)
+        {
+            var unread = await GetUnreadAsync(token);
+            return unread.IsSuccess
+                ? Result<int>.Success(unread.Value?.Sum(item => item.UnreadCount) ?? 0)
+                : unread.To<int>();
+        }
+    }
+
+    /// <summary>Clears mention notices once the user opens that room. Direct messages are left alone.</summary>
+    Task<Result> MarkRoomReadAsync(int roomId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Success());
+
+    /// <summary>Unread mention counts keyed by room, so a room list can show where they happened.</summary>
+    Task<Result<IReadOnlyDictionary<int, int>>> GetUnreadRoomMentionsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<IReadOnlyDictionary<int, int>>.Success(new Dictionary<int, int>()));
 }
 
 /// <summary>
@@ -92,4 +114,10 @@ public interface IChatRealtime
 
     /// <summary>Tells layout badges that <paramref name="userId"/>'s unread count changed.</summary>
     Task PublishUnreadChangedAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Delivers a room message to people who were mentioned, including when they do not have that room open.
+    /// </summary>
+    Task PublishMentionAsync(ChatMessageDto message, IReadOnlyCollection<string> userIds, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
 }

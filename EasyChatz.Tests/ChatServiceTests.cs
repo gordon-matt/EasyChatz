@@ -156,6 +156,40 @@ public sealed class ChatServiceTests
     }
 
     [Fact]
+    public async Task Room_mention_notifies_that_person_until_they_open_the_room()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+        var room = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
+
+        await database.Chat.SendPrivateMessageAsync("blair", "See you there", cancellationToken);
+        var posted = await database.Chat.SendRoomMessageAsync(room.Id, "Hi @[Blair Chen](blair)", cancellationToken);
+        Assert.True(posted.IsSuccess);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var direct = await database.Notifications.GetUnreadAsync(cancellationToken);
+        Assert.Equal(1, direct.Value!.Single().UnreadCount);
+
+        var total = await database.Notifications.CountUnreadAsync(cancellationToken);
+        Assert.Equal(2, total.Value);
+
+        var byRoom = await database.Notifications.GetUnreadRoomMentionsAsync(cancellationToken);
+        Assert.Equal(1, byRoom.Value![room.Id]);
+
+        var waiting = await database.Delivery.ListPendingAsync(DateTime.UtcNow.AddMinutes(1), cancellationToken);
+        Assert.Contains(waiting, notice => notice.ToUserId == "blair" && notice.Content.Contains("blair", StringComparison.Ordinal));
+
+        var clearedDirect = await database.Notifications.MarkReadAsync("alex", cancellationToken);
+        Assert.True(clearedDirect.IsSuccess);
+        Assert.Equal(1, (await database.Notifications.CountUnreadAsync(cancellationToken)).Value);
+
+        var clearedRoom = await database.Notifications.MarkRoomReadAsync(room.Id, cancellationToken);
+        Assert.True(clearedRoom.IsSuccess);
+        Assert.Equal(0, (await database.Notifications.CountUnreadAsync(cancellationToken)).Value);
+        Assert.Empty((await database.Notifications.GetUnreadRoomMentionsAsync(cancellationToken)).Value!);
+    }
+
+    [Fact]
     public async Task Mention_search_leaves_out_the_signed_in_user()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

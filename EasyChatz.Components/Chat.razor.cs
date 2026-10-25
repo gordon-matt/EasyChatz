@@ -295,6 +295,29 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             conversations.Clear();
             conversations.AddRange(conversationResult.Value);
         }
+
+        await LoadRoomMentionsAsync();
+    }
+
+    /// <summary>Puts a badge on each room that mentioned the user before this page was open.</summary>
+    private async Task LoadRoomMentionsAsync()
+    {
+        var mentions = await Notifications.GetUnreadRoomMentionsAsync();
+        if (!mentions.IsSuccess || mentions.Value is null)
+        {
+            return;
+        }
+
+        foreach (var (roomId, count) in mentions.Value)
+        {
+            if (count <= 0 || activeRoom?.Id == roomId)
+            {
+                continue;
+            }
+
+            roomUnread[roomId] = count;
+            roomMentioned.Add(roomId);
+        }
     }
 
     private async Task ReloadConversationsAsync()
@@ -322,6 +345,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         roomMentioned.Remove(room.Id);
         error = null;
         messages.Clear();
+        await Notifications.MarkRoomReadAsync(room.Id);
         await LoadMessagesAsync(beforeId: null, older: false);
         if (connected && module is not null)
         {
@@ -683,6 +707,10 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         {
             AddMessage(message);
             scrollPending = true;
+            if (me is not null && ChatMentions.Mentions(message.Content, me.Id))
+            {
+                await Notifications.MarkRoomReadAsync(activeRoom.Id);
+            }
         }
         else if (message.ToRoomId is int roomId && !string.Equals(message.FromUserId, me?.Id, StringComparison.Ordinal))
         {
