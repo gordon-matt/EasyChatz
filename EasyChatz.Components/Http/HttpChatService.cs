@@ -43,6 +43,9 @@ internal sealed class HttpChatService(EasyChatzApiClient api) : IChatService
     public Task<Result<ChatMessageRemovedDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default) =>
         api.DeleteAsync($"messages/{messageId}", Json.ChatMessageRemovedDto, cancellationToken);
 
+    public async Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default) =>
+        (await api.GetAsync($"{ApiRoutes.Mentions}?q={Uri.EscapeDataString(term ?? string.Empty)}&take={take}", Json.ListChatMentionDto, cancellationToken)).MapList();
+
     private static string Page(string path, int? take, int? beforeId)
     {
         var query = new List<string>();

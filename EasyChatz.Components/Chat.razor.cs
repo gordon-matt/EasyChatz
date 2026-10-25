@@ -16,6 +16,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private readonly List<ChatMessageDto> messages = [];
     private readonly HashSet<int> seenMessageIds = [];
     private readonly List<ChatPresenceDto> online = [];
+    private readonly List<ChatMentionDto> pickedMentions = [];
+    private readonly HashSet<int> roomMentioned = [];
 
     private ChatUser? me;
     private ChatRoomDto? activeRoom;
@@ -317,6 +319,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         activeConversation = null;
         composerBound = false;
         roomUnread.Remove(room.Id);
+        roomMentioned.Remove(room.Id);
         error = null;
         messages.Clear();
         await LoadMessagesAsync(beforeId: null, older: false);
@@ -433,7 +436,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
-        string text = draft;
+        // Mentions picked from the list become stored tokens. Only rooms support them.
+        string text = activeRoom is not null ? ChatMentions.Encode(draft, pickedMentions) : draft;
         busy = true;
         error = null;
 
@@ -448,6 +452,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             }
 
             draft = string.Empty;
+            pickedMentions.Clear();
             AddMessage(sent.Value);
             scrollPending = true;
             await OnMessage.InvokeAsync(sent.Value);
@@ -477,6 +482,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         {
             string? payload = await module.InvokeAsync<string?>("sendPrivate", sessionId, activeConversation.UserId, text);
             draft = string.Empty;
+            pickedMentions.Clear();
             var sent = Read(payload, EasyChatzJsonContext.Default.ChatMessageDto);
             if (sent is null)
             {
@@ -513,6 +519,67 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await SendAsync();
         await RenderAsync();
     }
+
+    /// <summary>Called by the composer while the user types <c>@name</c>. Only rooms offer suggestions.</summary>
+    [JSInvokable]
+    public async Task<string> SearchMentions(string? term)
+    {
+        if (activeRoom is null || me is null)
+        {
+            return "[]";
+        }
+
+        var found = await ChatService.SearchMentionsAsync(term, 6);
+        return JsonSerializer.Serialize(
+            found.IsSuccess && found.Value is not null ? found.Value.ToList() : [],
+            EasyChatzJsonContext.Default.ListChatMentionDto);
+    }
+
+    /// <summary>Remembers who was picked from the list, so their <c>@name</c> is stored as a real mention on send.</summary>
+    [JSInvokable]
+    public void RegisterMention(string userId, string displayName)
+    {
+        if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(displayName))
+        {
+            pickedMentions.RemoveAll(m => string.Equals(m.UserId, userId, StringComparison.Ordinal));
+            pickedMentions.Add(new ChatMentionDto(userId, displayName));
+        }
+    }
+
+    private bool MentionsMe(ChatMessageDto message) =>
+        me is not null
+        && message.ToRoomId is not null
+        && !string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal)
+        && ChatMentions.Mentions(message.Content, me.Id);
+
+    /// <summary>
+    /// Built by hand rather than in markup: the bubble keeps line breaks (<c>white-space: pre-wrap</c>),
+    /// so any whitespace between Razor elements would show up as stray spaces.
+    /// </summary>
+    private RenderFragment RenderContent(ChatMessageDto message) => builder =>
+    {
+        // Direct messages never contain mentions. A token typed by hand there is shown as text.
+        if (message.ToRoomId is null)
+        {
+            builder.AddContent(0, message.Content);
+            return;
+        }
+
+        foreach (var part in ChatMentions.Parse(message.Content))
+        {
+            if (part.MentionUserId is null)
+            {
+                builder.AddContent(0, part.Text);
+                continue;
+            }
+
+            bool self = me is not null && string.Equals(part.MentionUserId, me.Id, StringComparison.Ordinal);
+            builder.OpenElement(1, "span");
+            builder.AddAttribute(2, "class", self ? "ec-mention ec-mention-me" : "ec-mention");
+            builder.AddContent(3, "@" + part.Text);
+            builder.CloseElement();
+        }
+    };
 
     private Task OnComposerKeyDown(KeyboardEventArgs args) =>
         args.Key == "Enter" && !args.ShiftKey ? SendFromComposer(null) : Task.CompletedTask;
@@ -620,6 +687,10 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         else if (message.ToRoomId is int roomId && !string.Equals(message.FromUserId, me?.Id, StringComparison.Ordinal))
         {
             roomUnread[roomId] = roomUnread.GetValueOrDefault(roomId) + 1;
+            if (me is not null && ChatMentions.Mentions(message.Content, me.Id))
+            {
+                roomMentioned.Add(roomId);
+            }
         }
 
         await OnMessage.InvokeAsync(message);

@@ -47,6 +47,9 @@ public sealed record ChatPendingNotice(
     string Content,
     DateTime CreatedAtUtc);
 
+/// <summary>A person offered in the mention suggestions while typing <c>@</c> in a room.</summary>
+public sealed record ChatMentionDto(string UserId, string DisplayName);
+
 public sealed record ChatPresenceDto(string ConnectionId, string UserId, string DisplayName, bool IsAdministrator);
 
 public sealed record SaveRoomRequest(string? Name);

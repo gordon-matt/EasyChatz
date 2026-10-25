@@ -54,7 +54,7 @@
                             </span>
                             @if (unread > 0 && !active)
                             {
-                                <span class="ec-badge">@unread</span>
+                                <span class="ec-badge @(roomMentioned.Contains(room.Id) ? "ec-badge-mention" : null)" title="@(roomMentioned.Contains(room.Id) ? "You were mentioned" : null)">@(roomMentioned.Contains(room.Id) ? $"@{unread}" : unread.ToString())</span>
                             }
                         </button>
                     }
@@ -135,7 +135,7 @@
                             }
 
                             bool mine = string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal);
-                            <article class="ec-message @(mine ? "ec-mine" : null)">
+                            <article class="ec-message @(mine ? "ec-mine" : null) @(MentionsMe(message) ? "ec-mentioned" : null)">
                                 @if (!mine)
                                 {
                                     <span class="ec-avatar">@Initials(message.FromDisplayName)</span>
@@ -145,7 +145,7 @@
                                     {
                                         <span class="ec-author">@message.FromDisplayName</span>
                                     }
-                                    <p>@message.Content</p>
+                                    <p>@RenderContent(message)</p>
                                     <time datetime="@message.Timestamp.ToString("o")">@local.ToString("t")</time>
                                     @if (mine)
                                     {

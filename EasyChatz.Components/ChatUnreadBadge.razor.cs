@@ -3,7 +3,8 @@ using Microsoft.JSInterop;
 namespace EasyChatz.Components;
 
 /// <summary>
-/// Unread direct-message count for a host layout. It listens on the chat hub without joining the online list.
+/// Unread direct-message count for a host layout. By default it listens on the chat hub without joining the online list;
+/// set <see cref="TrackPresence"/> so the user also shows as online while this layout is open on any page.
 /// </summary>
 public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
 {
@@ -30,6 +31,12 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
     [Parameter]
     public string? Class { get; set; }
 
+    /// <summary>
+    /// Counts this connection as the user being online. Without it, someone is only online while the Chat component is open.
+    /// </summary>
+    [Parameter]
+    public bool TrackPresence { get; set; }
+
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
@@ -49,8 +56,13 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
         {
             module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/EasyChatz.Components/easychatz.js");
             self = DotNetObjectReference.Create(this);
-            string join = Address.HubUrl.Contains('?') ? "&" : "?";
-            string hub = Address.HubUrl + join + Constants.WatchQueryName + "=1";
+            string hub = Address.HubUrl;
+            if (!TrackPresence)
+            {
+                string join = hub.Contains('?') ? "&" : "?";
+                hub += join + Constants.WatchQueryName + "=1";
+            }
+
             await module.InvokeVoidAsync("watchUnread", sessionId, hub, Address.IncludeCredentials, self);
             connected = true;
         }

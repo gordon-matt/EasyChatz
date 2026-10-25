@@ -31,6 +31,11 @@ public sealed class TestDirectory : IChatUserDirectory
             _ => null,
         });
 
+    public Task<IReadOnlyList<ChatUser>> SearchAsync(string term, int take, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ChatUser>>([.. new[] { Alex, Blair }
+            .Where(u => u.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase))
+            .Take(take)]);
+
     public Task<IReadOnlyDictionary<string, ChatUser>> FindManyAsync(IEnumerable<string> userIds, CancellationToken cancellationToken = default)
     {
         var found = new Dictionary<string, ChatUser>(StringComparer.Ordinal);

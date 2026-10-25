@@ -92,6 +92,8 @@ export function bindComposer(element, dotNetRef) {
     }
 
     element.dataset.ecBound = '1';
+    // Added first, so an open suggestion list gets Enter and Tab before the send handler below.
+    attachMentions(element, dotNetRef);
     element.addEventListener('keydown', event => {
         if (event.key !== 'Enter' || event.shiftKey || event.isComposing) {
             return;
@@ -103,6 +105,150 @@ export function bindComposer(element, dotNetRef) {
     return true;
 }
 
+// "@" followed by a name, ending at the caret. The first character can't be a space, so "meet @ 5pm" is left alone.
+const mentionPattern = /(^|\s)@(?!\s)([^@\r\n]{0,40})$/;
+
+function attachMentions(element, dotNetRef) {
+    const state = { items: [], index: 0, menu: null, start: -1, timer: 0, sequence: 0, picking: false };
+
+    const close = () => {
+        state.sequence++;
+        window.clearTimeout(state.timer);
+        state.items = [];
+        state.start = -1;
+        state.menu?.remove();
+        state.menu = null;
+    };
+
+    const select = index => {
+        const item = state.items[index];
+        if (!item || state.start < 0) {
+            return;
+        }
+
+        const caret = element.selectionStart;
+        const before = element.value.slice(0, state.start);
+        const after = element.value.slice(caret);
+        const inserted = `@${item.displayName} `;
+        element.value = before + inserted + after;
+        const position = before.length + inserted.length;
+        element.setSelectionRange(position, position);
+        close();
+        // The text after the inserted name still looks like a search. Don't reopen the list for it.
+        state.picking = true;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        state.picking = false;
+        void dotNetRef.invokeMethodAsync('RegisterMention', item.userId, item.displayName);
+        element.focus();
+    };
+
+    const render = () => {
+        if (state.items.length === 0) {
+            state.menu?.remove();
+            state.menu = null;
+            return;
+        }
+
+        const root = element.closest('.ec-root');
+        if (!root) {
+            return;
+        }
+
+        if (!state.menu) {
+            // The theme variables live on .ec-root, and Blazor owns everything under .ec-shell,
+            // so the list goes straight under the root and is positioned against the viewport.
+            state.menu = document.createElement('div');
+            state.menu.className = 'ec-mention-menu';
+            state.menu.setAttribute('role', 'listbox');
+            root.appendChild(state.menu);
+        }
+
+        const box = element.getBoundingClientRect();
+        state.menu.style.left = `${box.left}px`;
+        state.menu.style.width = `${Math.min(box.width, 320)}px`;
+        state.menu.style.bottom = `${window.innerHeight - box.top + 6}px`;
+        state.menu.replaceChildren(...state.items.map((item, index) => {
+            const option = document.createElement('div');
+            option.className = 'ec-mention-option' + (index === state.index ? ' ec-active' : '');
+            option.setAttribute('role', 'option');
+            option.textContent = item.displayName;
+            // mousedown, not click: the textarea must not lose focus first.
+            option.addEventListener('mousedown', event => {
+                event.preventDefault();
+                select(index);
+            });
+            return option;
+        }));
+    };
+
+    const update = () => {
+        if (state.picking) {
+            return;
+        }
+
+        const caret = element.selectionStart;
+        const match = mentionPattern.exec(element.value.slice(0, caret));
+        if (!match) {
+            close();
+            return;
+        }
+
+        state.start = caret - match[2].length - 1;
+        const term = match[2];
+        const sequence = ++state.sequence;
+        window.clearTimeout(state.timer);
+        state.timer = window.setTimeout(async () => {
+            try {
+                const json = await dotNetRef.invokeMethodAsync('SearchMentions', term);
+                if (sequence !== state.sequence) {
+                    return;
+                }
+
+                state.items = JSON.parse(json);
+                state.index = 0;
+                render();
+            } catch {
+                close();
+            }
+        }, 120);
+    };
+
+    element.addEventListener('input', update);
+    element.addEventListener('click', update);
+    element.addEventListener('blur', () => window.setTimeout(close, 150));
+    element.addEventListener('keydown', event => {
+        if (!state.menu || state.items.length === 0 || event.isComposing) {
+            return;
+        }
+
+        const swallow = () => {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        };
+
+        switch (event.key) {
+            case 'ArrowDown':
+                swallow();
+                state.index = (state.index + 1) % state.items.length;
+                render();
+                break;
+            case 'ArrowUp':
+                swallow();
+                state.index = (state.index - 1 + state.items.length) % state.items.length;
+                render();
+                break;
+            case 'Enter':
+            case 'Tab':
+                swallow();
+                select(state.index);
+                break;
+            case 'Escape':
+                swallow();
+                close();
+                break;
+        }
+    });
+}
 export function scrollToEnd(element) {
     if (!element) {
         return;

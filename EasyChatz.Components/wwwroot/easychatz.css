@@ -241,6 +241,33 @@
     text-align: center;
 }
 
+.ec-badge-mention { background: var(--ec-danger); color: #ffffff; }
+
+.ec-mention {
+    padding: 0 4px;
+    border-radius: 4px;
+    background: var(--ec-accent-soft);
+    color: var(--ec-accent);
+    font-weight: 600;
+}
+.ec-mention-me { background: var(--ec-accent); color: var(--ec-accent-text); }
+.ec-mine .ec-mention { background: rgba(255, 255, 255, 0.22); color: inherit; }
+.ec-mentioned .ec-bubble { box-shadow: inset 3px 0 0 var(--ec-accent); }
+
+.ec-mention-menu {
+    position: fixed;
+    z-index: 1000;
+    max-height: 220px;
+    overflow: auto;
+    padding: 4px;
+    border: 1px solid var(--ec-border);
+    border-radius: var(--ec-radius);
+    background: var(--ec-surface-raised);
+    box-shadow: var(--ec-shadow);
+}
+.ec-mention-option { padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.ec-mention-option:hover,
+.ec-mention-option.ec-active { background: var(--ec-accent-soft); }
 .ec-thread { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; min-height: 0; overflow: hidden; }
 .ec-thread-head {
     display: flex;

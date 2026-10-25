@@ -14,6 +14,8 @@ namespace EasyChatz.Components.Http;
 [JsonSerializable(typeof(List<ChatRoomDto>))]
 [JsonSerializable(typeof(List<ChatMessageDto>))]
 [JsonSerializable(typeof(List<ChatConversationDto>))]
+[JsonSerializable(typeof(ChatMentionDto))]
+[JsonSerializable(typeof(List<ChatMentionDto>))]
 [JsonSerializable(typeof(ChatPresenceDto))]
 [JsonSerializable(typeof(List<ChatPresenceDto>))]
 [JsonSerializable(typeof(SaveRoomRequest))]

@@ -11,6 +11,7 @@ public static class ApiRoutes
     public const string Conversation = "conversations/{userId}";
     public const string ConversationMessages = "conversations/{userId}/messages";
     public const string Message = "messages/{messageId:int}";
+    public const string Mentions = "mentions";
     public const string Notifications = "notifications";
     public const string NotificationRead = "notifications/{fromUserId}/read";
 }

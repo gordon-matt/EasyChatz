@@ -130,4 +130,40 @@ public sealed class ChatServiceTests
         var remaining = await database.Chat.GetRoomMessagesAsync(room.Id, take: 10, cancellationToken: cancellationToken);
         Assert.DoesNotContain(remaining.Value!, m => m.Content == "Message 3");
     }
+    [Fact]
+    public async Task Room_mentions_are_rewritten_with_the_real_name_and_unknown_people_become_plain_text()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+        var room = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
+
+        var posted = await database.Chat.SendRoomMessageAsync(
+            room.Id, "Hi @[Fake Name](blair) and @[Ghost](nobody)", cancellationToken);
+
+        Assert.True(posted.IsSuccess);
+        Assert.Equal("Hi @[Blair Chen](blair) and @Ghost", posted.Value!.Content);
+    }
+
+    [Fact]
+    public async Task Direct_messages_flatten_mentions()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+
+        var sent = await database.Chat.SendPrivateMessageAsync("blair", "Hey @[Blair Chen](blair)", cancellationToken);
+
+        Assert.Equal("Hey @Blair Chen", sent.Value!.Content);
+    }
+
+    [Fact]
+    public async Task Mention_search_leaves_out_the_signed_in_user()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+
+        var found = await database.Chat.SearchMentionsAsync("a", 8, cancellationToken);
+
+        Assert.True(found.IsSuccess);
+        Assert.Equal("blair", found.Value!.Single().UserId);
+    }
 }

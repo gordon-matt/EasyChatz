@@ -185,7 +185,7 @@ public sealed partial class ChatService(
             return Result<ChatMessageDto>.Forbidden("Only an administrator can post in Announcements.");
         }
 
-        var clean = CleanMessage(content);
+        var clean = await CleanMessageAsync(content, allowMentions: true, cancellationToken);
         if (!clean.IsSuccess)
         {
             return clean.To<ChatMessageDto>();
@@ -285,7 +285,7 @@ public sealed partial class ChatService(
             return Result<ChatMessageDto>.NotFound("That person could not be found.");
         }
 
-        var clean = CleanMessage(content);
+        var clean = await CleanMessageAsync(content, allowMentions: false, cancellationToken);
         if (!clean.IsSuccess)
         {
             return clean.To<ChatMessageDto>();
@@ -337,6 +337,28 @@ public sealed partial class ChatService(
         return Result<ChatMessageRemovedDto>.Success(dto);
     }
 
+    public async Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default)
+    {
+        var actor = await RequireAsync(cancellationToken);
+        if (!actor.IsSuccess)
+        {
+            return actor.To<IReadOnlyList<ChatMentionDto>>();
+        }
+
+        string query = term?.Trim() ?? string.Empty;
+        int count = Math.Clamp(take, 1, 20);
+
+        // One extra, so dropping the signed-in user still leaves a full list.
+        var found = await directory.SearchAsync(query, count + 1, cancellationToken);
+        var people = found
+            .Where(p => !string.Equals(p.Id, actor.Value.Id, StringComparison.Ordinal))
+            .Take(count)
+            .Select(p => new ChatMentionDto(p.Id, p.DisplayName))
+            .ToList();
+
+        return Result<IReadOnlyList<ChatMentionDto>>.Success(people);
+    }
+
     private async Task<Result<ChatUser>> RequireAsync(CancellationToken cancellationToken)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -374,12 +396,28 @@ public sealed partial class ChatService(
             : Result<string>.Success(trimmed);
     }
 
-    private Result<string> CleanMessage(string? content)
+    /// <summary>
+    /// Strips markup, then settles mentions: in a room each token is checked against the directory
+    /// and rewritten with the person's real name, so a hand-built token cannot pose as someone else.
+    /// Anywhere else tokens are flattened to plain text.
+    /// </summary>
+    private async Task<Result<string>> CleanMessageAsync(string? content, bool allowMentions, CancellationToken cancellationToken)
     {
         string clean = string.IsNullOrWhiteSpace(content) ? string.Empty : StripHtmlRegex().Replace(content, string.Empty).Trim();
         if (clean.Length == 0)
         {
             return Result<string>.Invalid(new ValidationError(nameof(content), "Message content is required."));
+        }
+
+        var mentioned = allowMentions ? ChatMentions.UserIds(clean) : [];
+        if (mentioned.Count > 0)
+        {
+            var known = await directory.FindManyAsync(mentioned, cancellationToken);
+            clean = ChatMentions.Normalize(clean, known);
+        }
+        else
+        {
+            clean = ChatMentions.ToPlainText(clean);
         }
 
         int max = Math.Clamp(options.Value.MaxMessageLength, 1, Constants.MaxLengths.Message);

@@ -52,6 +52,9 @@ public static class EndpointRouteBuilderExtensions
             group.MapDelete(ApiRoutes.Message, async (int messageId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.DeleteMessageAsync(messageId, cancellationToken)).ToHttpResult());
 
+            group.MapGet(ApiRoutes.Mentions, async (string? q, int? take, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.SearchMentionsAsync(q, take ?? 8, cancellationToken)).ToHttpResult());
+
             group.MapGet(ApiRoutes.Notifications, async (IChatNotificationService notifications, CancellationToken cancellationToken) =>
                 (await notifications.GetUnreadAsync(cancellationToken)).ToHttpResult());
 

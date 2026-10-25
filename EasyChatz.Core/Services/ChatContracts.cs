@@ -29,6 +29,9 @@ public interface IChatService
     Task<Result<ChatMessageDto>> SendPrivateMessageAsync(string toUserId, string content, CancellationToken cancellationToken = default);
 
     Task<Result<ChatMessageRemovedDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default);
+
+    /// <summary>People matching <paramref name="term"/> who can be mentioned in a room. The signed-in user is left out.</summary>
+    Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default);
 }
 
 public interface IChatNotificationService
@@ -57,6 +60,13 @@ public interface IChatUserDirectory
     Task<ChatUser?> FindAsync(string userId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyDictionary<string, ChatUser>> FindManyAsync(IEnumerable<string> userIds, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// People whose name contains <paramref name="term"/>, for <c>@</c> mentions. Hosts that do not
+    /// implement this get no suggestions, and mentions stay switched off.
+    /// </summary>
+    Task<IReadOnlyList<ChatUser>> SearchAsync(string term, int take, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ChatUser>>([]);
 }
 
 /// <summary>The signed-in user for the current request or Blazor circuit.</summary>
