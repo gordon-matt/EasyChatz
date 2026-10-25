@@ -479,17 +479,18 @@ public sealed partial class ChatService(
         return people.ToDictionary(p => p.Key, p => p.Value.DisplayName, StringComparer.Ordinal);
     }
 
-    private static string NameOf(IReadOnlyDictionary<string, string> names, string userId)
+    private string NameOf(IReadOnlyDictionary<string, string> names, string userId)
     {
         if (string.Equals(userId, Constants.SystemUserId, StringComparison.Ordinal))
         {
-            return "EasyChatz";
+            string displayName = options.Value.SystemDisplayName;
+            return string.IsNullOrWhiteSpace(displayName) ? "EasyChatz" : displayName.Trim();
         }
 
         return names.TryGetValue(userId, out string? name) && !string.IsNullOrWhiteSpace(name) ? name : userId;
     }
 
-    private static ChatRoomDto ToRoom(ChatRoom room, IReadOnlyDictionary<string, string> names) =>
+    private ChatRoomDto ToRoom(ChatRoom room, IReadOnlyDictionary<string, string> names) =>
         new(room.Id, room.Name, room.AdminUserId, NameOf(names, room.AdminUserId));
 
     private static ChatMessageDto ToMessage(ChatMessage message, string fromDisplayName, string? roomName) =>

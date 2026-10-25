@@ -13,6 +13,11 @@ public sealed class EasyChatzOptions
 
     public string AnnouncementsRoomName { get; set; } = Constants.AnnouncementsRoomName;
 
+    /// <summary>
+    /// Name shown for the seeded Announcements room ("Started by …"). The host sets this to its own name.
+    /// </summary>
+    public string SystemDisplayName { get; set; } = "EasyChatz";
+
     public int MaxMessageLength { get; set; } = Constants.MaxLengths.Message;
 
     public int MaxRoomNameLength { get; set; } = Constants.MaxLengths.RoomName;
