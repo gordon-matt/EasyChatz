@@ -7,7 +7,7 @@
 		<RootNamespace>EasyChatz</RootNamespace>
 		<Description>Models, service contracts and chat rules shared by the EasyChatz server and the browser.</Description>
 		<IsTrimmable>true</IsTrimmable>
-		<Version>1.0.1</Version>
+		<Version>1.1.0</Version>
 	</PropertyGroup>
 
 	<ItemGroup>
