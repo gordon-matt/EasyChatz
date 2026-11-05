@@ -6,14 +6,14 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>EasyChatz.Components</RootNamespace>
 		<Description>Blazor chat UI. Drop it into a Blazor or MVC app, or publish EasyChatz.CustomElements for React.</Description>
+		<PackageTags>chat;chat-ui;blazor;razor-components;aspnetcore-mvc;signalr;easychatz</PackageTags>
 		<IsTrimmable>true</IsTrimmable>
-		<Version>1.1.0</Version>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<SupportedPlatform Include="browser" />
-		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.13" />
-		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.13" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.14" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.14" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -2,13 +2,27 @@
 
 	<PropertyGroup>
 		<LangVersion>latest</LangVersion>
-		<Version>1.0.0</Version>
+		<Version>1.1.1</Version>
 		<Authors>Matt Gordon</Authors>
 		<Company>Matt Gordon</Company>
 		<Product>EasyChatz</Product>
 		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 		<PackageTags>chat;messaging;blazor;mvc;react;custom-elements;signalr</PackageTags>
+		<PackageProjectUrl>https://github.com/gordon-matt/EasyChatz</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/gordon-matt/EasyChatz</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageIcon>Logo.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
+
+	<!-- Demo and test projects are never packed; everything else gets the icon and README in its package. -->
+	<PropertyGroup Condition="'$(IsPackable)' == ''">
+		<IsPackable Condition="$(MSBuildProjectName.Contains('.Demo.')) Or $(MSBuildProjectName.EndsWith('.Tests'))">false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(IsPackable)' != 'false'">
+		<None Include="$(MSBuildThisFileDirectory)_Misc\Logo.png" Pack="true" PackagePath="\" Visible="false" />
+		<None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+	</ItemGroup>
 
 </Project>

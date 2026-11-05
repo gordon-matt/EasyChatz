@@ -1,11 +1,11 @@
-<img src="https://github.com/gordon-matt/EasyChatz/blob/master/_Misc/Logo.png" alt="Logo" width="350px" />
+<img src="https://github.com/gordon-matt/EasyChatz/raw/master/_Misc/Logo.png" alt="Logo" width="350px" />
 
 An embeddable chat for .NET 10. It is written in Blazor and also runs in ASP.NET Core MVC, React, or any HTML page through a custom element. Rooms and direct messages are stored in MySQL, PostgreSQL, SQL Server, or SQLite, and live updates go through SignalR.
 
 ## Screenshots
-<img src="https://github.com/gordon-matt/EasyChatz/blob/master/_Misc/Screenshots/Light.png" alt="Light Theme" width="100%" />
+<img src="https://github.com/gordon-matt/EasyChatz/raw/master/_Misc/Screenshots/Light.png" alt="Light Theme" width="100%" />
 
-<img src="https://github.com/gordon-matt/EasyChatz/blob/master/_Misc/Screenshots/Dark.png" alt="Dark Theme" width="100%" />
+<img src="https://github.com/gordon-matt/EasyChatz/raw/master/_Misc/Screenshots/Dark.png" alt="Dark Theme" width="100%" />
 
 Features in this version:
 
@@ -357,12 +357,12 @@ If you find this project useful, consider supporting its development.
 
 <p align="center">
   <a href="https://buymeacoffee.com/vnmatt">
-    <img src="https://github.com/gordon-matt/MyResume/blob/gh-pages/assets/images/BuyMeACoffee_Logo.png"
+    <img src="https://github.com/gordon-matt/MyResume/raw/gh-pages/assets/images/BuyMeACoffee_Logo.png"
          alt="Buy Me a Coffee"
          height="40">
   </a>&nbsp;&nbsp;&nbsp;
   <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=gordon_matt%40live%2ecom&lc=AU&currency_code=AUD&bn=PP%2dDonationsBF%3abtn_donateCC_LG%2egif%3aNonHosted">
-    <img src="https://github.com/gordon-matt/MyResume/blob/gh-pages/assets/images/PayPal_Logo.png"
+    <img src="https://github.com/gordon-matt/MyResume/raw/gh-pages/assets/images/PayPal_Logo.png"
          alt="Donate with PayPal"
          height="40">
   </a>
@@ -374,7 +374,7 @@ If you find this project useful, consider supporting its development.
 
 <p align="center">
   <a href="https://buymeacoffee.com/vnmatt">
-    <img src="https://github.com/gordon-matt/MyResume/blob/gh-pages/assets/images/BuyMeACoffee_QR.png"
+    <img src="https://github.com/gordon-matt/MyResume/raw/gh-pages/assets/images/BuyMeACoffee_QR.png"
          alt="Buy Me a Coffee QR Code"
          width="180">
   </a>

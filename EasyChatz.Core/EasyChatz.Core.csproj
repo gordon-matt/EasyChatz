@@ -6,8 +6,8 @@
 		<Nullable>enable</Nullable>
 		<RootNamespace>EasyChatz</RootNamespace>
 		<Description>Models, service contracts and chat rules shared by the EasyChatz server and the browser.</Description>
+		<PackageTags>chat;messaging;chat-models;chatrooms;direct-messages;easychatz</PackageTags>
 		<IsTrimmable>true</IsTrimmable>
-		<Version>1.1.0</Version>
 	</PropertyGroup>
 
 	<ItemGroup>
