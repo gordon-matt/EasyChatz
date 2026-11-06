@@ -2,6 +2,9 @@ using Microsoft.Extensions.Options;
 
 namespace EasyChatz;
 
+/// <summary>
+/// Provides extension methods for endpoint route builders.
+/// </summary>
 public static class EndpointRouteBuilderExtensions
 {
     extension(IEndpointRouteBuilder endpoints)

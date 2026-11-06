@@ -2,13 +2,25 @@ using System.Diagnostics;
 
 namespace EasyChatz.Data.Entities;
 
+/// <summary>
+/// Represents the chat message.
+/// </summary>
 [DebuggerDisplay("{FromUserId}: {Content}")]
 public class ChatMessage : BaseEntity<int>
 {
+    /// <summary>
+    /// Gets or sets the content.
+    /// </summary>
     public string Content { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the timestamp.
+    /// </summary>
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Gets or sets the from user identifier.
+    /// </summary>
     public string FromUserId { get; set; } = string.Empty;
 
     /// <summary>Set for room messages. Null for a direct message.</summary>
@@ -17,13 +29,26 @@ public class ChatMessage : BaseEntity<int>
     /// <summary>Set for a direct message. Null for a room message.</summary>
     public string? ToUserId { get; set; }
 
+    /// <summary>
+    /// Gets or sets the to room.
+    /// </summary>
     public virtual ChatRoom? ToRoom { get; set; }
 
+    /// <summary>
+    /// Gets or sets the notifications.
+    /// </summary>
     public virtual ICollection<MessageNotification> Notifications { get; set; } = [];
 }
 
+/// <summary>
+/// Represents the chat message map.
+/// </summary>
 public class ChatMessageMap : IEntityTypeConfiguration<ChatMessage>
 {
+    /// <summary>
+    /// Configures the value.
+    /// </summary>
+    /// <param name="builder">The builder.</param>
     public void Configure(EntityTypeBuilder<ChatMessage> builder)
     {
         builder.ToTable(Constants.Tables.Messages, Constants.Schema);

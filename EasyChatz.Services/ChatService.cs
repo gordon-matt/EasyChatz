@@ -2,6 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace EasyChatz.Services;
 
+/// <summary>
+/// Represents the chat service.
+/// </summary>
 public sealed partial class ChatService(
     ILogger<ChatService> logger,
     IOptions<EasyChatzOptions> options,
@@ -12,6 +15,11 @@ public sealed partial class ChatService(
     IChatCurrentUser currentUser,
     IChatRealtime realtime) : IChatService
 {
+    /// <summary>
+    /// Gets the current user.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat user.</returns>
     public async Task<Result<ChatUser>> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -20,6 +28,11 @@ public sealed partial class ChatService(
             : Result<ChatUser>.Success(actor);
     }
 
+    /// <summary>
+    /// Gets the rooms.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat rooms.</returns>
     public async Task<Result<IReadOnlyList<ChatRoomDto>>> GetRoomsAsync(CancellationToken cancellationToken = default)
     {
         string announcements = options.Value.AnnouncementsRoomName;
@@ -33,6 +46,12 @@ public sealed partial class ChatService(
         return Result<IReadOnlyList<ChatRoomDto>>.Success(found.Select(r => ToRoom(r, names)).ToList());
     }
 
+    /// <summary>
+    /// Gets the room.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room.</returns>
     public async Task<Result<ChatRoomDto>> GetRoomAsync(int roomId, CancellationToken cancellationToken = default)
     {
         var room = await rooms.FindOneAsync(roomId);
@@ -45,6 +64,12 @@ public sealed partial class ChatService(
         return Result<ChatRoomDto>.Success(ToRoom(room, names));
     }
 
+    /// <summary>
+    /// Creates the room.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room.</returns>
     public async Task<Result<ChatRoomDto>> CreateRoomAsync(string name, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -78,6 +103,13 @@ public sealed partial class ChatService(
         return Result<ChatRoomDto>.Success(dto);
     }
 
+    /// <summary>
+    /// Updates the room.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="name">The name.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room updated.</returns>
     public async Task<Result<ChatRoomUpdatedDto>> UpdateRoomAsync(int roomId, string name, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -117,6 +149,12 @@ public sealed partial class ChatService(
         return Result<ChatRoomUpdatedDto>.Success(dto);
     }
 
+    /// <summary>
+    /// Deletes the room.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room removed.</returns>
     public async Task<Result<ChatRoomRemovedDto>> DeleteRoomAsync(int roomId, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -149,6 +187,14 @@ public sealed partial class ChatService(
         return Result<ChatRoomRemovedDto>.Success(dto);
     }
 
+    /// <summary>
+    /// Gets the room messages.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="take">The take.</param>
+    /// <param name="beforeId">The before identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat messages.</returns>
     public async Task<Result<IReadOnlyList<ChatMessageDto>>> GetRoomMessagesAsync(
         int roomId, int? take = null, int? beforeId = null, CancellationToken cancellationToken = default)
     {
@@ -166,6 +212,13 @@ public sealed partial class ChatService(
         return Result<IReadOnlyList<ChatMessageDto>>.Success(await MapAsync(page, room.Name, cancellationToken));
     }
 
+    /// <summary>
+    /// Sends the room message.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="content">The content.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message.</returns>
     public async Task<Result<ChatMessageDto>> SendRoomMessageAsync(int roomId, string content, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -219,6 +272,11 @@ public sealed partial class ChatService(
         return Result<ChatMessageDto>.Success(dto);
     }
 
+    /// <summary>
+    /// Gets the conversations.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat conversations.</returns>
     public async Task<Result<IReadOnlyList<ChatConversationDto>>> GetConversationsAsync(CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -237,6 +295,12 @@ public sealed partial class ChatService(
             unread.GetValueOrDefault(p.UserId))).ToList());
     }
 
+    /// <summary>
+    /// Gets the conversation.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat conversation.</returns>
     public async Task<Result<ChatConversationDto>> GetConversationAsync(string userId, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -256,6 +320,14 @@ public sealed partial class ChatService(
             new ChatConversationDto(person.Id, person.DisplayName, unread.GetValueOrDefault(person.Id)));
     }
 
+    /// <summary>
+    /// Gets the private messages.
+    /// </summary>
+    /// <param name="otherUserId">The other user identifier.</param>
+    /// <param name="take">The take.</param>
+    /// <param name="beforeId">The before identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat messages.</returns>
     public async Task<Result<IReadOnlyList<ChatMessageDto>>> GetPrivateMessagesAsync(
         string otherUserId, int? take = null, int? beforeId = null, CancellationToken cancellationToken = default)
     {
@@ -276,6 +348,13 @@ public sealed partial class ChatService(
         return Result<IReadOnlyList<ChatMessageDto>>.Success(await MapAsync(page, roomName: null, cancellationToken));
     }
 
+    /// <summary>
+    /// Sends the private message.
+    /// </summary>
+    /// <param name="toUserId">The to user identifier.</param>
+    /// <param name="content">The content.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message.</returns>
     public async Task<Result<ChatMessageDto>> SendPrivateMessageAsync(string toUserId, string content, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -321,6 +400,12 @@ public sealed partial class ChatService(
         return Result<ChatMessageDto>.Success(dto);
     }
 
+    /// <summary>
+    /// Deletes the message.
+    /// </summary>
+    /// <param name="messageId">The message identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message removed.</returns>
     public async Task<Result<ChatMessageRemovedDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);
@@ -352,6 +437,13 @@ public sealed partial class ChatService(
         return Result<ChatMessageRemovedDto>.Success(dto);
     }
 
+    /// <summary>
+    /// Searches the mentions.
+    /// </summary>
+    /// <param name="term">The term.</param>
+    /// <param name="take">The take.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat mentions.</returns>
     public async Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default)
     {
         var actor = await RequireAsync(cancellationToken);

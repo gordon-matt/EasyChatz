@@ -25,9 +25,15 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
     [Inject]
     private IJSRuntime Js { get; set; } = default!;
 
+    /// <summary>
+    /// Gets or sets the theme.
+    /// </summary>
     [Parameter]
     public string Theme { get; set; } = Constants.Themes.Auto;
 
+    /// <summary>
+    /// Gets or sets the class.
+    /// </summary>
     [Parameter]
     public string? Class { get; set; }
 
@@ -37,13 +43,18 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool TrackPresence { get; set; }
 
+    /// <summary>
+    /// Gets or sets the additional attributes.
+    /// </summary>
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
     private int Count { get; set; }
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync() => await RefreshAsync();
 
+    /// <inheritdoc/>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (disposed || connected || connecting)
@@ -72,6 +83,10 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Handles the unread changed event.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public async Task OnUnreadChanged()
     {
@@ -82,6 +97,10 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Releases the resources used by this instance.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public async ValueTask DisposeAsync()
     {
         disposed = true;

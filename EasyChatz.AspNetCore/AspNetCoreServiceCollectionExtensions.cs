@@ -2,6 +2,9 @@ using Microsoft.Extensions.Options;
 
 namespace EasyChatz;
 
+/// <summary>
+/// Provides extension methods for asp net core service collections.
+/// </summary>
 public static class AspNetCoreServiceCollectionExtensions
 {
     extension(IServiceCollection services)

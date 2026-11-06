@@ -43,6 +43,11 @@ public static partial class ChatMentions
         return result;
     }
 
+    /// <summary>
+    /// Parses the value.
+    /// </summary>
+    /// <param name="content">The content.</param>
+    /// <returns>The chat content parts.</returns>
     public static IReadOnlyList<ChatContentPart> Parse(string? content)
     {
         if (string.IsNullOrEmpty(content))
@@ -77,6 +82,12 @@ public static partial class ChatMentions
             ? []
             : [.. TokenRegex().Matches(content).Select(m => m.Groups["id"].Value).Distinct(StringComparer.Ordinal)];
 
+    /// <summary>
+    /// Gets the mentions.
+    /// </summary>
+    /// <param name="content">The content.</param>
+    /// <param name="userId">The user identifier.</param>
+    /// <returns>true when the condition is met; otherwise, false.</returns>
     public static bool Mentions(string? content, string userId) =>
         !string.IsNullOrEmpty(content)
         && TokenRegex().Matches(content).Any(m => string.Equals(m.Groups["id"].Value, userId, StringComparison.Ordinal));

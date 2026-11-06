@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Components.Web;
 
 namespace EasyChatz.Components;
 
+/// <summary>
+/// Represents the chat.
+/// </summary>
 public partial class Chat : ComponentBase, IAsyncDisposable
 {
     private const int PageSize = 50;
@@ -60,21 +63,39 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     [Inject]
     private IJSRuntime Js { get; set; } = default!;
 
+    /// <summary>
+    /// Gets or sets the theme.
+    /// </summary>
     [Parameter]
     public string Theme { get; set; } = Constants.Themes.Auto;
 
+    /// <summary>
+    /// Gets or sets the height.
+    /// </summary>
     [Parameter]
     public string Height { get; set; } = "640px";
 
+    /// <summary>
+    /// Gets or sets the class.
+    /// </summary>
     [Parameter]
     public string? Class { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether this instance is show people.
+    /// </summary>
     [Parameter]
     public bool ShowPeople { get; set; } = true;
 
+    /// <summary>
+    /// Gets or sets the callback raised for the conversation changed event.
+    /// </summary>
     [Parameter]
     public EventCallback<ChatConversationEvent> OnConversationChanged { get; set; }
 
+    /// <summary>
+    /// Gets or sets the callback raised for the message event.
+    /// </summary>
     [Parameter]
     public EventCallback<ChatMessageDto> OnMessage { get; set; }
 
@@ -86,6 +107,9 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     [Parameter]
     public EventCallback<ChatPresenceDto> OnOpenUser { get; set; }
 
+    /// <summary>
+    /// Gets or sets the open user text.
+    /// </summary>
     [Parameter]
     public string OpenUserText { get; set; } = "Open";
 
@@ -93,6 +117,9 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     [Parameter]
     public int? MaxLength { get; set; }
 
+    /// <summary>
+    /// Gets or sets the additional attributes.
+    /// </summary>
     [Parameter(CaptureUnmatchedValues = true)]
     public Dictionary<string, object>? AdditionalAttributes { get; set; }
 
@@ -123,6 +150,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         .GroupBy(p => p.UserId, StringComparer.Ordinal)
         .Select(g => g.First());
 
+    /// <inheritdoc/>
     protected override async Task OnInitializedAsync()
     {
         var current = await ChatService.GetCurrentUserAsync();
@@ -145,6 +173,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <inheritdoc/>
     protected override async Task OnParametersSetAsync()
     {
         if (me is null || string.IsNullOrWhiteSpace(WithUserId)
@@ -157,6 +186,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await OpenWithUserAsync(WithUserId);
     }
 
+    /// <inheritdoc/>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // WebAssembly renders once before OnInitializedAsync finishes, so the signed-in user
@@ -532,6 +562,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Sends from the composer.
+    /// </summary>
+    /// <param name="text">The text.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public async Task SendFromComposer(string? text)
     {
@@ -689,6 +724,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         RemoveRoom(deleted.Value.RoomId);
     }
 
+    /// <summary>
+    /// Handles the room message event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public async Task OnRoomMessage(string json)
     {
@@ -725,6 +765,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await RenderAsync();
     }
 
+    /// <summary>
+    /// Handles the private message event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public async Task OnPrivateMessage(string json)
     {
@@ -767,6 +812,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await RenderAsync();
     }
 
+    /// <summary>
+    /// Handles the message removed event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnMessageRemoved(string json)
     {
@@ -780,6 +830,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Handles the room added event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnRoomAdded(string json)
     {
@@ -793,6 +848,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Handles the room updated event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public async Task OnRoomUpdated(string json)
     {
@@ -811,6 +871,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await RenderAsync();
     }
 
+    /// <summary>
+    /// Handles the room removed event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnRoomRemoved(string json)
     {
@@ -824,9 +889,19 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Handles the room deleted event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnRoomDeleted(string json) => OnRoomRemoved(json);
 
+    /// <summary>
+    /// Handles the online users event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnOnlineUsers(string json)
     {
@@ -840,6 +915,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return RenderAsync();
     }
 
+    /// <summary>
+    /// Handles the user joined event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnUserJoined(string json)
     {
@@ -853,6 +933,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Handles the user left event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnUserLeft(string json)
     {
@@ -866,6 +951,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Handles the hub error event.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
     public Task OnHubError(string message)
     {
@@ -1044,6 +1134,10 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         return string.Concat(char.ToUpperInvariant(parts[0][0]), char.ToUpperInvariant(parts[^1][0]));
     }
 
+    /// <summary>
+    /// Releases the resources used by this instance.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public async ValueTask DisposeAsync()
     {
         disposed = true;

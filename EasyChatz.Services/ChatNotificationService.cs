@@ -1,5 +1,8 @@
 namespace EasyChatz.Services;
 
+/// <summary>
+/// Represents the chat notification service.
+/// </summary>
 public sealed class ChatNotificationService(
     IRepository<MessageNotification> notifications,
     IRepository<ChatMessage> messages,
@@ -7,6 +10,14 @@ public sealed class ChatNotificationService(
     IChatCurrentUser currentUser,
     IChatRealtime realtime) : IChatNotificationService, IChatDeliveryQueue
 {
+    /// <summary>
+    /// Creates the value.
+    /// </summary>
+    /// <param name="chatMessageId">The chat message identifier.</param>
+    /// <param name="fromUserId">The from user identifier.</param>
+    /// <param name="toUserId">The to user identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task CreateAsync(int chatMessageId, string fromUserId, string toUserId, CancellationToken cancellationToken = default)
     {
         await notifications.InsertAsync(new MessageNotification
@@ -19,6 +30,11 @@ public sealed class ChatNotificationService(
         }, ContextOptions.ForCancellationToken(cancellationToken));
     }
 
+    /// <summary>
+    /// Gets the unread.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat conversations.</returns>
     public async Task<Result<IReadOnlyList<ChatConversationDto>>> GetUnreadAsync(CancellationToken cancellationToken = default)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -44,6 +60,12 @@ public sealed class ChatNotificationService(
                 r.Count)).ToList());
     }
 
+    /// <summary>
+    /// Gets the mark read.
+    /// </summary>
+    /// <param name="fromUserId">The from user identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the result.</returns>
     public async Task<Result> MarkReadAsync(string fromUserId, CancellationToken cancellationToken = default)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -77,6 +99,11 @@ public sealed class ChatNotificationService(
         return Result.Success();
     }
 
+    /// <summary>
+    /// Counts the unread.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the int.</returns>
     public async Task<Result<int>> CountUnreadAsync(CancellationToken cancellationToken = default)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -89,6 +116,11 @@ public sealed class ChatNotificationService(
         return Result<int>.Success(unread.Count);
     }
 
+    /// <summary>
+    /// Gets the unread room mentions.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the int, int i read only dictionary.</returns>
     public async Task<Result<IReadOnlyDictionary<int, int>>> GetUnreadRoomMentionsAsync(CancellationToken cancellationToken = default)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -121,6 +153,12 @@ public sealed class ChatNotificationService(
         return Result<IReadOnlyDictionary<int, int>>.Success(counts);
     }
 
+    /// <summary>
+    /// Gets the mark room read.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the result.</returns>
     public async Task<Result> MarkRoomReadAsync(int roomId, CancellationToken cancellationToken = default)
     {
         var actor = await currentUser.GetAsync(cancellationToken);
@@ -171,6 +209,12 @@ public sealed class ChatNotificationService(
         return found.ToHashSet();
     }
 
+    /// <summary>
+    /// Lists the pending.
+    /// </summary>
+    /// <param name="createdBeforeUtc">The created before utc.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the chat pending notices.</returns>
     public async Task<IReadOnlyList<ChatPendingNotice>> ListPendingAsync(DateTime createdBeforeUtc, CancellationToken cancellationToken = default)
     {
         List<MessageNotification> rows;
@@ -200,6 +244,12 @@ public sealed class ChatNotificationService(
             .ToList();
     }
 
+    /// <summary>
+    /// Performs the mark delivered operation.
+    /// </summary>
+    /// <param name="noticeIds">The notice ids.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task MarkDeliveredAsync(IReadOnlyCollection<int> noticeIds, CancellationToken cancellationToken = default)
     {
         int[] ids = noticeIds.Where(id => id > 0).Distinct().ToArray();

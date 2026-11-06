@@ -12,6 +12,11 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
     private static readonly Dictionary<string, Connection> Connections = new();
     private static readonly Lock Gate = new();
 
+    /// <summary>
+    /// Joins the value.
+    /// </summary>
+    /// <param name="roomName">The room name.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public async Task Join(string roomName)
     {
         if (string.IsNullOrWhiteSpace(roomName))
@@ -39,6 +44,11 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
         connection.Room = roomName;
     }
 
+    /// <summary>
+    /// Performs the leave operation.
+    /// </summary>
+    /// <param name="roomName">The room name.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public Task Leave(string roomName) => Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
 
     /// <summary>Puts the connection back in its user group after a reconnect.</summary>
@@ -50,6 +60,12 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
             : Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
     }
 
+    /// <summary>
+    /// Sends the private.
+    /// </summary>
+    /// <param name="toUserId">The to user identifier.</param>
+    /// <param name="message">The message.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the chat message.</returns>
     public async Task<ChatMessageDto?> SendPrivate(string toUserId, string message)
     {
         var result = await chat.SendPrivateMessageAsync(toUserId, message);
@@ -62,6 +78,7 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
         return result.Value;
     }
 
+    /// <inheritdoc/>
     public override async Task OnConnectedAsync()
     {
         string? userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -97,6 +114,7 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
         await base.OnConnectedAsync();
     }
 
+    /// <inheritdoc/>
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         Connection? connection;

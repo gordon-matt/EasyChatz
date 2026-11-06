@@ -4,6 +4,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace EasyChatz;
 
+/// <summary>
+/// Provides extension methods for component service collections.
+/// </summary>
 public static class ComponentServiceCollectionExtensions
 {
     extension(IServiceCollection services)

@@ -3,10 +3,19 @@ namespace EasyChatz.Data.Entities;
 /// <summary>One row per direct message, so a recipient can see what they have not opened yet.</summary>
 public class MessageNotification : BaseEntity<int>
 {
+    /// <summary>
+    /// Gets or sets the chat message identifier.
+    /// </summary>
     public int ChatMessageId { get; set; }
 
+    /// <summary>
+    /// Gets or sets the from user identifier.
+    /// </summary>
     public string FromUserId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the to user identifier.
+    /// </summary>
     public string ToUserId { get; set; } = string.Empty;
 
     /// <summary>True once the recipient opens that conversation.</summary>
@@ -15,13 +24,26 @@ public class MessageNotification : BaseEntity<int>
     /// <summary>Set when a host channel has taken this notice. Null while it is still waiting.</summary>
     public DateTime? DeliveredAtUtc { get; set; }
 
+    /// <summary>
+    /// Gets or sets the created at utc.
+    /// </summary>
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Gets or sets the message.
+    /// </summary>
     public virtual ChatMessage Message { get; set; } = null!;
 }
 
+/// <summary>
+/// Represents the message notification map.
+/// </summary>
 public class MessageNotificationMap : IEntityTypeConfiguration<MessageNotification>
 {
+    /// <summary>
+    /// Configures the value.
+    /// </summary>
+    /// <param name="builder">The builder.</param>
     public void Configure(EntityTypeBuilder<MessageNotification> builder)
     {
         builder.ToTable(Constants.Tables.Notifications, Constants.Schema);
