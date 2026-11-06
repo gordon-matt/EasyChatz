@@ -9,7 +9,11 @@ namespace EasyChatz.Components;
 /// </summary>
 public partial class Chat : ComponentBase, IAsyncDisposable
 {
-    private const int PageSize = 50;
+    /// <summary>First page. Usually a little more than a window; a shortfall loads only the rest.</summary>
+    private const int FirstPageSize = 15;
+
+    /// <summary>Older pages fetched while scrolling up, and the cap for one viewport top-up.</summary>
+    private const int OlderPageSize = 30;
     private const string ConnectingMessage = "Still connecting…";
 
     private readonly string sessionId = Guid.NewGuid().ToString("N");
@@ -43,6 +47,11 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private bool busy;
     private bool scrollPending;
     private bool hasMore;
+
+    /// <summary>The latest page did not fill the window, so the next render should top it up.</summary>
+    private bool fillPending;
+    private int fillRounds;
+    private int threadVersion;
     private int? restoreFromHeight;
     private string filter = string.Empty;
     private string draft = string.Empty;
@@ -218,6 +227,29 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             await InvokeQuietlyAsync("restoreHeight", scroller, previous);
         }
 
+        // A page that doesn't overflow can never be scrolled, so the scroll handler would never
+        // ask for the rest. Measure after layout and fetch only what the window is still short.
+        if (fillPending && !loadingOlder && hasMore && fillRounds < 6 && messages.Count > 0 && module is not null)
+        {
+            fillPending = false;
+            int version = threadVersion;
+            int shortfall = await module.InvokeAsync<int>("shortfall", scroller);
+            if (version == threadVersion && shortfall > 0)
+            {
+                int average = Math.Max(1, await module.InvokeAsync<int>("averageItemHeight", scroller));
+                if (version == threadVersion)
+                {
+                    fillRounds++;
+                    int take = Math.Clamp((int)Math.Ceiling(shortfall / (double)average), 1, OlderPageSize);
+                    await LoadMessagesAsync(messages[0].Id, older: true, take, filling: true);
+                    if (version == threadVersion)
+                    {
+                        StateHasChanged();
+                    }
+                }
+            }
+        }
+
         if (!connected && !connecting && !connectFailed)
         {
             await ConnectAsync();
@@ -374,7 +406,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         roomUnread.Remove(room.Id);
         roomMentioned.Remove(room.Id);
         error = null;
-        messages.Clear();
+        ResetThread();
         await Notifications.MarkRoomReadAsync(room.Id);
         await LoadMessagesAsync(beforeId: null, older: false);
         if (connected && module is not null)
@@ -392,7 +424,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         activeRoom = null;
         composerBound = false;
         error = null;
-        messages.Clear();
+        ResetThread();
         await Notifications.MarkReadAsync(conversation.UserId);
         await ReloadConversationsAsync();
         ReplaceConversation(conversation with { UnreadCount = 0 });
@@ -430,22 +462,42 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await OpenConversationAsync(conversation);
     }
 
-    private async Task LoadMessagesAsync(int? beforeId, bool older)
+    private void ResetThread()
     {
+        threadVersion++;
+        fillRounds = 0;
+        fillPending = false;
+        messages.Clear();
+    }
+
+    private Task LoadMessagesAsync(int? beforeId, bool older) =>
+        LoadMessagesAsync(beforeId, older, older ? OlderPageSize : FirstPageSize, filling: false);
+
+    private async Task LoadMessagesAsync(int? beforeId, bool older, int take, bool filling)
+    {
+        int version = threadVersion;
         if (older)
         {
             loadingOlder = true;
-            if (module is not null)
+            // Scrolling up should keep the same messages on screen. Filling a short window should
+            // stay on the latest ones, so that path scrolls to the end instead of restoring.
+            if (!filling && module is not null)
             {
                 restoreFromHeight = await module.InvokeAsync<int>("captureHeight", scroller);
             }
         }
 
         Result<IReadOnlyList<ChatMessageDto>> result = activeRoom is not null
-            ? await ChatService.GetRoomMessagesAsync(activeRoom.Id, PageSize, beforeId)
+            ? await ChatService.GetRoomMessagesAsync(activeRoom.Id, take, beforeId)
             : activeConversation is not null
-                ? await ChatService.GetPrivateMessagesAsync(activeConversation.UserId, PageSize, beforeId)
+                ? await ChatService.GetPrivateMessagesAsync(activeConversation.UserId, take, beforeId)
                 : Result<IReadOnlyList<ChatMessageDto>>.Success([]);
+
+        if (version != threadVersion)
+        {
+            loadingOlder = false;
+            return;
+        }
 
         loadingOlder = false;
         if (!result.IsSuccess || result.Value is null)
@@ -454,23 +506,29 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
-        hasMore = result.Value.Count >= PageSize;
+        hasMore = result.Value.Count >= take;
         if (older)
         {
             var fresh = result.Value.Where(m => messages.All(existing => existing.Id != m.Id)).ToList();
             messages.InsertRange(0, fresh);
+            if (filling && fresh.Count > 0)
+            {
+                scrollPending = true;
+                fillPending = hasMore;
+            }
         }
         else
         {
             messages.Clear();
             messages.AddRange(result.Value);
             scrollPending = true;
+            fillPending = hasMore;
         }
     }
 
     private async Task OnScrollAsync()
     {
-        if (module is null || loadingOlder || !hasMore || messages.Count == 0)
+        if (module is null || loadingOlder || fillPending || !hasMore || messages.Count == 0)
         {
             return;
         }
@@ -1004,7 +1062,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (activeRoom?.Id == roomId)
         {
             activeRoom = null;
-            messages.Clear();
+            ResetThread();
         }
     }
 

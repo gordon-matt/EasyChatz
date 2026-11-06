@@ -266,7 +266,29 @@ export function scrollToEnd(element) {
 }
 
 export function isNearTop(element) {
-    return !!element && element.scrollTop < 48;
+    // No overflow means the list is sitting at the top because it is short, not because the
+    // reader scrolled there. Only a list tall enough to scroll should ask for older messages.
+    return !!element && element.scrollHeight > element.clientHeight + 8 && element.scrollTop < 48;
+}
+
+// How many pixels of content are missing before the list overflows the window, plus a little,
+// so the reader has something to scroll. Zero once the window is full.
+export function shortfall(element) {
+    if (!element || element.clientHeight === 0) {
+        return 0;
+    }
+
+    const gap = element.clientHeight + 80 - element.scrollHeight;
+    return gap > 0 ? gap : 0;
+}
+
+export function averageItemHeight(element) {
+    const items = element?.querySelectorAll('.ec-message');
+    if (!items || items.length === 0) {
+        return 64;
+    }
+
+    return Math.max(1, Math.round(element.scrollHeight / items.length));
 }
 
 export function captureHeight(element) {

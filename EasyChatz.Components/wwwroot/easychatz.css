@@ -289,6 +289,7 @@
     gap: 8px;
 }
 
+.ec-older { align-self: center; color: var(--ec-muted); font-size: 12px; }
 .ec-day {
     align-self: center;
     margin: 8px 0;

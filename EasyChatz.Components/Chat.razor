@@ -124,6 +124,10 @@
                     }
 
                     <div class="ec-messages" @ref="scroller" @onscroll="OnScrollAsync">
+                        @if (loadingOlder)
+                        {
+                            <div class="ec-older">Loading earlier messages…</div>
+                        }
                         @{ DateTime? previousDay = null; }
                         @foreach (var message in messages)
                         {
