@@ -22,7 +22,7 @@ EasyChatz does not authenticate anyone. The host already has accounts. Register 
 | Project | Purpose |
 | --- | --- |
 | `EasyChatz.Core` | DTOs, `IChatService`, `IChatUserDirectory`, `ApiRoutes`. Depends on Ardalis.Result. |
-| `EasyChatz.Data` | Entities and the EF Core model. Tables live in the `chatz` schema. |
+| `EasyChatz.Data` | Entities and the EF Core model. Tables live in the `chatz` schema, or carry an `EasyChatz_` prefix on MySQL and SQLite. |
 | `EasyChatz.Data.Sqlite` | SQLite. Register it with `AddEasyChatzSqlite()`. |
 | `EasyChatz.Data.Sql` | SQL Server. Register it with `AddEasyChatzSqlServer()`. |
 | `EasyChatz.Data.Npgsql` | PostgreSQL. Register it with `AddEasyChatzNpgsql()`. |
@@ -56,7 +56,7 @@ builder.Services.AddEasyChatzSqlite(builder.Configuration.GetConnectionString("E
 
 ### Database
 
-Pick one provider. All four use schema `chatz` and a private migrations history table, `__EasyChatzMigrationsHistory`, so EasyChatz can share a database with the host. SQLite has no schemas; the provider ignores that warning and creates the same tables.
+Pick one provider. SQL Server and PostgreSQL use schema `chatz`. MySQL and SQLite have no usable schemas (in MySQL a schema is a database), so their tables are prefixed `EasyChatz_` instead. All four keep a private migrations history table, `__EasyChatzMigrationsHistory`, so EasyChatz can share a database with the host.
 
 ```csharp
 builder.Services.AddEasyChatzSqlite(connectionString);     // EasyChatz.Data.Sqlite
@@ -239,7 +239,7 @@ app.MapEasyChatzHub().RequireAuthorization().RequireCors("EasyChatz");
 
 ## Integrating with the host
 
-EasyChatz keeps its own rooms, messages, and notifications in the `chatz` schema. It does not keep accounts, profile pages, or an email sender. The hooks below are how a host connects those.
+EasyChatz keeps its own rooms, messages, and notifications in the `chatz` schema (or `EasyChatz_` tables on MySQL and SQLite). It does not keep accounts, profile pages, or an email sender. The hooks below are how a host connects those.
 
 ### Directory
 

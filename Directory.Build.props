@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<LangVersion>latest</LangVersion>
-		<Version>1.1.1</Version>
+		<Version>1.1.2</Version>
 		<Authors>Matt Gordon</Authors>
 		<Company>Matt Gordon</Company>
 		<Product>EasyChatz</Product>
@@ -11,7 +11,7 @@
 		<PackageProjectUrl>https://github.com/gordon-matt/EasyChatz</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/gordon-matt/EasyChatz</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
-		<PackageIcon>Logo.png</PackageIcon>
+		<PackageIcon>Icon.png</PackageIcon>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
 
@@ -21,7 +21,7 @@
 	</PropertyGroup>
 
 	<ItemGroup Condition="'$(IsPackable)' != 'false'">
-		<None Include="$(MSBuildThisFileDirectory)_Misc\Logo.png" Pack="true" PackagePath="\" Visible="false" />
+		<None Include="$(MSBuildThisFileDirectory)_Misc\Icon.png" Pack="true" PackagePath="\" Visible="false" />
 		<None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
 	</ItemGroup>
 

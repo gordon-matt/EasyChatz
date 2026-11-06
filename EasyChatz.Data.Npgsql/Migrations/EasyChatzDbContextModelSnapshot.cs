@@ -18,7 +18,7 @@ namespace EasyChatz.Data.Npgsql.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("chatz")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -39,9 +39,9 @@ namespace EasyChatz.Data.Npgsql.Migrations
 
                     b.Property<string>("FromUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("timestamp with time zone");
@@ -50,9 +50,9 @@ namespace EasyChatz.Data.Npgsql.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("ToUserId")
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("Id");
 
@@ -75,9 +75,9 @@ namespace EasyChatz.Data.Npgsql.Migrations
 
                     b.Property<string>("AdminUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -115,18 +115,18 @@ namespace EasyChatz.Data.Npgsql.Migrations
 
                     b.Property<string>("FromUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(128)");
 
                     b.Property<bool>("IsRead")
                         .HasColumnType("boolean");
 
                     b.Property<string>("ToUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("character varying(450)");
+                        .HasColumnType("character varying(128)");
 
                     b.HasKey("Id");
 

@@ -15,7 +15,8 @@ public sealed record ChatContentPart(string Text, string? MentionUserId = null);
 /// </summary>
 public static partial class ChatMentions
 {
-    [GeneratedRegex(@"@\[(?<name>[^\]\r\n]{1,100})\]\((?<id>[^)\s]{1,450})\)", RegexOptions.CultureInvariant)]
+    // The id limit matches Constants.MaxLengths.UserId. A generated regex cannot reference it.
+    [GeneratedRegex(@"@\[(?<name>[^\]\r\n]{1,100})\]\((?<id>[^)\s]{1,128})\)", RegexOptions.CultureInvariant)]
     private static partial Regex TokenRegex();
 
     /// <summary>The stored form of a mention. Brackets and parentheses in a name would break parsing, so they are dropped.</summary>

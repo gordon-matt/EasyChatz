@@ -16,8 +16,7 @@ namespace EasyChatz.Data.MySql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("chatz")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             modelBuilder.Entity("EasyChatz.Data.Entities.ChatMessage", b =>
@@ -34,9 +33,9 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.Property<string>("FromUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("datetime(6)");
@@ -45,9 +44,9 @@ namespace EasyChatz.Data.MySql.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("ToUserId")
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.HasKey("Id");
 
@@ -57,7 +56,7 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.HasIndex("ToUserId", "FromUserId", "Id");
 
-                    b.ToTable("Messages", "chatz");
+                    b.ToTable("EasyChatz_Messages", (string)null);
                 });
 
             modelBuilder.Entity("EasyChatz.Data.Entities.ChatRoom", b =>
@@ -68,9 +67,9 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.Property<string>("AdminUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)");
@@ -86,7 +85,7 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Rooms", "chatz");
+                    b.ToTable("EasyChatz_Rooms", (string)null);
                 });
 
             modelBuilder.Entity("EasyChatz.Data.Entities.MessageNotification", b =>
@@ -106,18 +105,18 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.Property<string>("FromUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.Property<bool>("IsRead")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<string>("ToUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.HasKey("Id");
 
@@ -127,7 +126,7 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.HasIndex("ToUserId", "FromUserId", "IsRead");
 
-                    b.ToTable("Notifications", "chatz");
+                    b.ToTable("EasyChatz_Notifications", (string)null);
                 });
 
             modelBuilder.Entity("EasyChatz.Data.Entities.ChatMessage", b =>

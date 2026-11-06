@@ -31,7 +31,7 @@ public class EasyChatzDbContextFactory(string connectionString) : IEasyChatzDbCo
 
         optionsBuilder.UseMySQL(connectionString, mySql => mySql
             .MigrationsAssembly(typeof(EasyChatzDbContext).Assembly.GetName().Name)
-            .MigrationsHistoryTable(Constants.MigrationsHistoryTable, Constants.Schema));
+            .MigrationsHistoryTable(Constants.MigrationsHistoryTable));
 
         return optionsBuilder.Options;
     }

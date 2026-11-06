@@ -5,8 +5,14 @@ namespace EasyChatz;
 /// </summary>
 public static class Constants
 {
-    /// <summary>Database schema for every provider that supports one. SQLite stores the same tables without a schema.</summary>
+    /// <summary>Database schema for providers that support one (SQL Server and PostgreSQL).</summary>
     public const string Schema = "chatz";
+
+    /// <summary>
+    /// Prepended to every table name on providers without schemas. In MySQL a schema is a database,
+    /// and SQLite has none, so the tables stay unqualified and are prefixed instead.
+    /// </summary>
+    public const string TablePrefix = "EasyChatz_";
 
     /// <summary>Kept apart from the host's <c>__EFMigrationsHistory</c> so both can share a database.</summary>
     public const string MigrationsHistoryTable = "__EasyChatzMigrationsHistory";
@@ -82,9 +88,10 @@ public static class Constants
         /// </summary>
         public const int Message = 2000;
         /// <summary>
-        /// The user identifier constant.
+        /// Wide enough for a GUID. Kept to 128 so two of them fit a MySQL index: under utf8mb4 a
+        /// varchar(450) pair exceeds the 3072 byte key limit.
         /// </summary>
-        public const int UserId = 450;
+        public const int UserId = 128;
     }
 
     /// <summary>

@@ -12,115 +12,107 @@ namespace EasyChatz.Data.MySql.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.EnsureSchema(
-                name: "chatz");
-
             migrationBuilder.AlterDatabase()
                 .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Rooms",
-                schema: "chatz",
+                name: "EasyChatz_Rooms",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Name = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false),
-                    AdminUserId = table.Column<string>(type: "varchar(450)", unicode: false, maxLength: 450, nullable: false),
+                    AdminUserId = table.Column<string>(type: "varchar(128)", unicode: false, maxLength: 128, nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "datetime(6)", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Rooms", x => x.Id);
+                    table.PrimaryKey("PK_EasyChatz_Rooms", x => x.Id);
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Messages",
-                schema: "chatz",
+                name: "EasyChatz_Messages",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     Content = table.Column<string>(type: "varchar(2000)", maxLength: 2000, nullable: false),
                     Timestamp = table.Column<DateTime>(type: "datetime(6)", nullable: false),
-                    FromUserId = table.Column<string>(type: "varchar(450)", unicode: false, maxLength: 450, nullable: false),
+                    FromUserId = table.Column<string>(type: "varchar(128)", unicode: false, maxLength: 128, nullable: false),
                     ToRoomId = table.Column<int>(type: "int", nullable: true),
-                    ToUserId = table.Column<string>(type: "varchar(450)", unicode: false, maxLength: 450, nullable: true)
+                    ToUserId = table.Column<string>(type: "varchar(128)", unicode: false, maxLength: 128, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Messages", x => x.Id);
+                    table.PrimaryKey("PK_EasyChatz_Messages", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Messages_Rooms_ToRoomId",
+                        name: "FK_EasyChatz_Messages_EasyChatz_Rooms_ToRoomId",
                         column: x => x.ToRoomId,
-                        principalSchema: "chatz",
-                        principalTable: "Rooms",
+                        principalTable: "EasyChatz_Rooms",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateTable(
-                name: "Notifications",
-                schema: "chatz",
+                name: "EasyChatz_Notifications",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("MySQL:ValueGenerationStrategy", MySQLValueGenerationStrategy.IdentityColumn),
                     ChatMessageId = table.Column<int>(type: "int", nullable: false),
-                    FromUserId = table.Column<string>(type: "varchar(450)", unicode: false, maxLength: 450, nullable: false),
-                    ToUserId = table.Column<string>(type: "varchar(450)", unicode: false, maxLength: 450, nullable: false),
+                    FromUserId = table.Column<string>(type: "varchar(128)", unicode: false, maxLength: 128, nullable: false),
+                    ToUserId = table.Column<string>(type: "varchar(128)", unicode: false, maxLength: 128, nullable: false),
                     IsRead = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    DeliveredAtUtc = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     CreatedAtUtc = table.Column<DateTime>(type: "datetime(6)", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Notifications", x => x.Id);
+                    table.PrimaryKey("PK_EasyChatz_Notifications", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Notifications_Messages_ChatMessageId",
+                        name: "FK_EasyChatz_Notifications_EasyChatz_Messages_ChatMessageId",
                         column: x => x.ChatMessageId,
-                        principalSchema: "chatz",
-                        principalTable: "Messages",
+                        principalTable: "EasyChatz_Messages",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_FromUserId_ToUserId_Id",
-                schema: "chatz",
-                table: "Messages",
+                name: "IX_EasyChatz_Messages_FromUserId_ToUserId_Id",
+                table: "EasyChatz_Messages",
                 columns: new[] { "FromUserId", "ToUserId", "Id" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_ToRoomId_Id",
-                schema: "chatz",
-                table: "Messages",
+                name: "IX_EasyChatz_Messages_ToRoomId_Id",
+                table: "EasyChatz_Messages",
                 columns: new[] { "ToRoomId", "Id" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Messages_ToUserId_FromUserId_Id",
-                schema: "chatz",
-                table: "Messages",
+                name: "IX_EasyChatz_Messages_ToUserId_FromUserId_Id",
+                table: "EasyChatz_Messages",
                 columns: new[] { "ToUserId", "FromUserId", "Id" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Notifications_ChatMessageId",
-                schema: "chatz",
-                table: "Notifications",
+                name: "IX_EasyChatz_Notifications_ChatMessageId",
+                table: "EasyChatz_Notifications",
                 column: "ChatMessageId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Notifications_ToUserId_FromUserId_IsRead",
-                schema: "chatz",
-                table: "Notifications",
+                name: "IX_EasyChatz_Notifications_IsRead_DeliveredAtUtc",
+                table: "EasyChatz_Notifications",
+                columns: new[] { "IsRead", "DeliveredAtUtc" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EasyChatz_Notifications_ToUserId_FromUserId_IsRead",
+                table: "EasyChatz_Notifications",
                 columns: new[] { "ToUserId", "FromUserId", "IsRead" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Rooms_Name",
-                schema: "chatz",
-                table: "Rooms",
+                name: "IX_EasyChatz_Rooms_Name",
+                table: "EasyChatz_Rooms",
                 column: "Name",
                 unique: true);
         }
@@ -129,16 +121,13 @@ namespace EasyChatz.Data.MySql.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Notifications",
-                schema: "chatz");
+                name: "EasyChatz_Notifications");
 
             migrationBuilder.DropTable(
-                name: "Messages",
-                schema: "chatz");
+                name: "EasyChatz_Messages");
 
             migrationBuilder.DropTable(
-                name: "Rooms",
-                schema: "chatz");
+                name: "EasyChatz_Rooms");
         }
     }
 }

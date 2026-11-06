@@ -18,7 +18,7 @@ namespace EasyChatz.Data.Sql.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("chatz")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -39,9 +39,9 @@ namespace EasyChatz.Data.Sql.Migrations
 
                     b.Property<string>("FromUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("datetime2");
@@ -50,9 +50,9 @@ namespace EasyChatz.Data.Sql.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("ToUserId")
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.HasKey("Id");
 
@@ -75,9 +75,9 @@ namespace EasyChatz.Data.Sql.Migrations
 
                     b.Property<string>("AdminUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -115,18 +115,18 @@ namespace EasyChatz.Data.Sql.Migrations
 
                     b.Property<string>("FromUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
 
                     b.Property<string>("ToUserId")
                         .IsRequired()
-                        .HasMaxLength(450)
+                        .HasMaxLength(128)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(450)");
+                        .HasColumnType("varchar(128)");
 
                     b.HasKey("Id");
 
