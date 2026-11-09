@@ -19,13 +19,13 @@
                     <span class="ec-spacer"></span>
                     @if (ShowPeople)
                     {
-                        <button type="button" class="ec-icon-button" title="People online" aria-pressed="@peopleOpen" @onclick="() => peopleOpen = !peopleOpen">
+                        <button type="button" class="ec-icon-button @(peopleOpen ? "ec-pressed" : null)" title="People online" aria-pressed="@peopleOpen" @onclick="() => peopleOpen = !peopleOpen">
                             <Icon Name="users" />
                         </button>
                     }
                     @if (features.AllowRoomArchive)
                     {
-                        <button type="button" class="ec-icon-button" title="@(showArchived ? "Hide archived" : "Show archived")" aria-pressed="@showArchived" @onclick="() => showArchived = !showArchived">
+                        <button type="button" class="ec-icon-button @(showArchived ? "ec-pressed" : null)" title="@(showArchived ? "Hide archived" : "Show archived")" aria-pressed="@showArchived" @onclick="() => showArchived = !showArchived">
                             <Icon Name="archive" />
                         </button>
                     }
@@ -77,8 +77,12 @@
                     @foreach (var conversation in VisibleConversations)
                     {
                         bool active = activeConversation?.UserId == conversation.UserId;
+                        bool onlineNow = IsOnline(conversation.UserId);
                         <button type="button" class="ec-nav-item @(active ? "ec-active" : null)" @onclick="() => OpenConversationAsync(conversation)">
-                            <span class="ec-avatar">@Initials(conversation.DisplayName)</span>
+                            <span class="ec-avatar">
+                                @Initials(conversation.DisplayName)
+                                <i class="ec-presence @(onlineNow ? null : "ec-presence-offline")" title="@(onlineNow ? "Online" : "Offline")"></i>
+                            </span>
                             <span class="ec-nav-copy">
                                 <span class="ec-nav-title">@conversation.DisplayName</span>
                             </span>
@@ -124,7 +128,7 @@
                         <span class="ec-spacer"></span>
                         @if (CanArchiveRoom)
                         {
-                            <button type="button" class="ec-icon-button" title="@(activeRoom!.IsArchived ? "Restore room" : "Archive room")" aria-pressed="@activeRoom.IsArchived" @onclick="ToggleArchiveAsync">
+                            <button type="button" class="ec-icon-button" title="@(activeRoom!.IsArchived ? "Restore room" : "Archive room")" aria-pressed="@activeRoom.IsArchived" @onclick="BeginArchiveAsync">
                                 <Icon Name="archive" />
                             </button>
                         }
@@ -267,6 +271,20 @@
                     <div class="ec-dialog-actions">
                         <button type="button" class="ec-text-button" @onclick="() => renameOpen = false">Cancel</button>
                         <button type="submit" class="ec-send">Save</button>
+                    </div>
+                </form>
+            </div>
+        }
+
+        @if (confirmArchive && activeRoom is not null)
+        {
+            <div class="ec-modal" @onclick="() => confirmArchive = false">
+                <form class="ec-dialog" @onclick:stopPropagation="true" @onsubmit="ArchiveRoomAsync" @onsubmit:preventDefault>
+                    <h3>Are you sure you want to archive this room?</h3>
+                    <p>@activeRoom.Name will be hidden, and nobody will be able to post.</p>
+                    <div class="ec-dialog-actions">
+                        <button type="button" class="ec-text-button" @onclick="() => confirmArchive = false">Cancel</button>
+                        <button type="submit" class="ec-send">Archive</button>
                     </div>
                 </form>
             </div>

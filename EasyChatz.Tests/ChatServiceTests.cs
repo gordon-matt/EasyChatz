@@ -191,6 +191,13 @@ public sealed class ChatServiceTests
         Assert.True(blocked.Value!.BlockedByMe);
         Assert.False(blocked.Value.HasBlockedMe);
 
+        database.CurrentUser.User = TestDirectory.Alex;
+        var hidden = await database.Chat.GetConversationsAsync(cancellationToken);
+        var blair = Assert.Single(hidden.Value!, c => c.UserId == TestDirectory.Blair.Id);
+        Assert.True(blair.HasBlockedMe);
+        Assert.False(blair.BlockedByMe);
+
+        database.CurrentUser.User = TestDirectory.Blair;
         var stillTalking = await database.Chat.SendPrivateMessageAsync("alex", "I can still write", cancellationToken);
         Assert.True(stillTalking.IsSuccess);
 

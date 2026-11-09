@@ -214,6 +214,7 @@
     background: var(--ec-success);
     border: 2px solid var(--ec-surface);
 }
+.ec-presence-offline { background: var(--ec-danger); }
 
 .ec-root.ec-unread {
     display: inline-block;
@@ -367,6 +368,11 @@
 }
 .ec-icon-button:hover,
 .ec-icon-button[aria-pressed="true"] { background: var(--ec-hover); color: var(--ec-text); }
+.ec-icon-button.ec-pressed,
+.ec-icon-button.ec-pressed:hover {
+    background: var(--ec-accent-soft);
+    color: var(--ec-accent);
+}
 
 .ec-send {
     height: 42px;

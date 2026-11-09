@@ -43,6 +43,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private bool newRoomOpen;
     private bool renameOpen;
     private bool confirmDelete;
+    private bool confirmArchive;
     private bool loadingOlder;
     private bool busy;
     private bool scrollPending;
@@ -187,12 +188,34 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
     }
 
-    private IEnumerable<ChatConversationDto> VisibleConversations => string.IsNullOrWhiteSpace(filter)
-        ? conversations
-        : conversations.Where(c => c.DisplayName.Contains(filter.Trim(), StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<ChatConversationDto> VisibleConversations
+    {
+        get
+        {
+            // Someone who blocked you stays out of the list, so their presence is not on screen.
+            IEnumerable<ChatConversationDto> source = features.AllowUserBlocks
+                ? conversations.Where(c => !c.HasBlockedMe)
+                : conversations;
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                return source;
+            }
+
+            string term = filter.Trim();
+            return source.Where(c => c.DisplayName.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private bool IsOnline(string userId) =>
+        online.Any(person => string.Equals(person.UserId, userId, StringComparison.Ordinal));
+
+    private bool BlockedMe(string userId) =>
+        features.AllowUserBlocks && conversations.Any(c =>
+            string.Equals(c.UserId, userId, StringComparison.Ordinal) && c.HasBlockedMe);
 
     private IEnumerable<ChatPresenceDto> OtherPeople => online
         .Where(p => me is null || !string.Equals(p.UserId, me.Id, StringComparison.Ordinal))
+        .Where(p => !BlockedMe(p.UserId))
         .GroupBy(p => p.UserId, StringComparer.Ordinal)
         .Select(g => g.First());
 
@@ -434,6 +457,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
 
         var onlyLocal = conversations
+            .Where(c => !c.HasBlockedMe)
             .Where(c => conversationResult.Value.All(saved => !string.Equals(saved.UserId, c.UserId, StringComparison.Ordinal)))
             .ToList();
         conversations.Clear();
@@ -757,16 +781,38 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         ReplaceMessage(deleted.Value);
     }
 
-    private async Task ToggleArchiveAsync()
+    private Task BeginArchiveAsync()
+    {
+        if (activeRoom is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (!activeRoom.IsArchived)
+        {
+            confirmArchive = true;
+            return Task.CompletedTask;
+        }
+
+        return ApplyArchiveAsync(archive: false);
+    }
+
+    private Task ArchiveRoomAsync()
+    {
+        confirmArchive = false;
+        return ApplyArchiveAsync(archive: true);
+    }
+
+    private async Task ApplyArchiveAsync(bool archive)
     {
         if (activeRoom is null)
         {
             return;
         }
 
-        var result = activeRoom.IsArchived
-            ? await ChatService.UnarchiveRoomAsync(activeRoom.Id)
-            : await ChatService.ArchiveRoomAsync(activeRoom.Id);
+        var result = archive
+            ? await ChatService.ArchiveRoomAsync(activeRoom.Id)
+            : await ChatService.UnarchiveRoomAsync(activeRoom.Id);
         if (!result.IsSuccess || result.Value is null)
         {
             error = result.GetDisplayMessage();
@@ -1015,27 +1061,37 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     /// <param name="json">The JSON.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     [JSInvokable]
-    public Task OnUserBlocked(string json)
+    public async Task OnUserBlocked(string json)
     {
         var change = Read(json, EasyChatzJsonContext.Default.ChatBlockChangedDto);
         if (change is null || me is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         if (string.Equals(change.BlockerUserId, me.Id, StringComparison.Ordinal))
         {
             UpdateBlock(change.BlockedUserId, blockedByMe: change.IsBlocked, hasBlockedMe: null);
-            return RenderAsync();
+            await RenderAsync();
+            return;
         }
 
         if (string.Equals(change.BlockedUserId, me.Id, StringComparison.Ordinal))
         {
-            UpdateBlock(change.BlockerUserId, blockedByMe: null, hasBlockedMe: change.IsBlocked);
-            return RenderAsync();
-        }
+            await ReloadConversationsAsync();
+            if (activeConversation is not null
+                && string.Equals(activeConversation.UserId, change.BlockerUserId, StringComparison.Ordinal))
+            {
+                var saved = conversations.FirstOrDefault(c =>
+                    string.Equals(c.UserId, change.BlockerUserId, StringComparison.Ordinal));
+                composerBound = false;
+                activeConversation = saved is null
+                    ? activeConversation with { HasBlockedMe = change.IsBlocked }
+                    : saved;
+            }
 
-        return Task.CompletedTask;
+            await RenderAsync();
+        }
     }
 
     /// <summary>

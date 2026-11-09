@@ -322,6 +322,24 @@ public sealed partial class ChatService(
         }
 
         var latest = await PartnerActivityAsync(actor.Value.Id, cancellationToken);
+        if (options.Value.AllowUserBlocks)
+        {
+            // A block with no messages yet still has to be known, so the client can hide that person.
+            var blockers = await blocks.FindAsync(new SearchOptions<ChatUserBlock>
+            {
+                Query = b => b.BlockedUserId == actor.Value.Id,
+                CancellationToken = cancellationToken,
+            });
+            var known = new HashSet<string>(latest.Select(p => p.UserId), StringComparer.Ordinal);
+            foreach (var blocker in blockers)
+            {
+                if (known.Add(blocker.BlockerUserId))
+                {
+                    latest.Add(new PartnerActivity(blocker.BlockerUserId, blocker.CreatedAtUtc));
+                }
+            }
+        }
+
         var unread = await UnreadCountsAsync(cancellationToken);
         var people = await directory.FindManyAsync(latest.Select(p => p.UserId), cancellationToken);
         var blockState = await BlocksBetweenAsync(actor.Value.Id, latest.Select(p => p.UserId), cancellationToken);
