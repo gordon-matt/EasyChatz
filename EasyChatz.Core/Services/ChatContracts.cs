@@ -14,6 +14,9 @@ public interface IChatService
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat user.</returns>
     Task<Result<ChatUser>> GetCurrentUserAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The host's switches for archive, block, and delete. Safe to call before any of those actions.</summary>
+    Task<Result<ChatFeaturesDto>> GetFeaturesAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets the rooms.
     /// </summary>
@@ -53,6 +56,12 @@ public interface IChatService
     /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room removed.</returns>
     Task<Result<ChatRoomRemovedDto>> DeleteRoomAsync(int roomId, CancellationToken cancellationToken = default);
+
+    /// <summary>Hides the room and stops new messages. The owner or an administrator can do this, and can undo it.</summary>
+    Task<Result<ChatRoomDto>> ArchiveRoomAsync(int roomId, CancellationToken cancellationToken = default);
+
+    /// <summary>Puts an archived room back. Same people who can archive it.</summary>
+    Task<Result<ChatRoomDto>> UnarchiveRoomAsync(int roomId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the room messages.
@@ -107,13 +116,19 @@ public interface IChatService
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message.</returns>
     Task<Result<ChatMessageDto>> SendPrivateMessageAsync(string toUserId, string content, CancellationToken cancellationToken = default);
 
+    /// <summary>Stops <paramref name="userId"/> from sending direct messages to the signed-in user.</summary>
+    Task<Result<ChatConversationDto>> BlockUserAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Lets <paramref name="userId"/> send direct messages again.</summary>
+    Task<Result<ChatConversationDto>> UnblockUserAsync(string userId, CancellationToken cancellationToken = default);
+
     /// <summary>
-    /// Deletes the message.
+    /// Clears the author's own message and keeps a note of who deleted it and when.
     /// </summary>
     /// <param name="messageId">The message identifier.</param>
     /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message removed.</returns>
-    Task<Result<ChatMessageRemovedDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default);
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message.</returns>
+    Task<Result<ChatMessageDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default);
 
     /// <summary>People matching <paramref name="term"/> who can be mentioned in a room. The signed-in user is left out.</summary>
     Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default);
@@ -291,5 +306,17 @@ public interface IChatRealtime
     /// Delivers a room message to people who were mentioned, including when they do not have that room open.
     /// </summary>
     Task PublishMentionAsync(ChatMessageDto message, IReadOnlyCollection<string> userIds, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    /// <summary>Replaces a message in open threads with the deleted note, instead of removing the row.</summary>
+    Task PublishMessageDeletedAsync(ChatMessageDto message, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    /// <summary>Tells every client that a room was archived or restored.</summary>
+    Task PublishRoomArchivedAsync(ChatRoomDto room, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    /// <summary>Tells both people that a direct-message block was added or removed.</summary>
+    Task PublishUserBlockChangedAsync(ChatBlockChangedDto change, CancellationToken cancellationToken = default) =>
         Task.CompletedTask;
 }

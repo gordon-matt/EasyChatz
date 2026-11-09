@@ -40,6 +40,18 @@ public static class ApiRoutes
     /// </summary>
     public const string Mentions = "mentions";
     /// <summary>
+    /// The features constant.
+    /// </summary>
+    public const string Features = "features";
+    /// <summary>
+    /// The room archive constant.
+    /// </summary>
+    public const string RoomArchive = "rooms/{roomId:int}/archive";
+    /// <summary>
+    /// The conversation block constant.
+    /// </summary>
+    public const string ConversationBlock = "conversations/{userId}/block";
+    /// <summary>
     /// The notifications constant.
     /// </summary>
     public const string Notifications = "notifications";

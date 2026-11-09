@@ -29,6 +29,19 @@ public class ChatMessage : BaseEntity<int>
     /// <summary>Set for a direct message. Null for a room message.</summary>
     public string? ToUserId { get; set; }
 
+    /// <summary>The text is cleared. The row stays so the thread can say who deleted it and when.</summary>
+    public bool IsDeleted { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deleted at utc.
+    /// </summary>
+    public DateTime? DeletedAtUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deleted by user identifier.
+    /// </summary>
+    public string? DeletedByUserId { get; set; }
+
     /// <summary>
     /// Gets or sets the to room.
     /// </summary>
@@ -57,6 +70,8 @@ public class ChatMessageMap : IEntityTypeConfiguration<ChatMessage>
         builder.Property(m => m.FromUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.ToUserId).HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.Timestamp).HasConversion(UtcDateTimeConverter.Instance);
+        builder.Property(m => m.DeletedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
+        builder.Property(m => m.DeletedByUserId).HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
 
         builder.HasOne(m => m.ToRoom)
             .WithMany(m => m.Messages)

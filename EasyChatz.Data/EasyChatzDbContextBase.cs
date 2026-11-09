@@ -21,6 +21,11 @@ public abstract class EasyChatzDbContextBase(DbContextOptions options) : DbConte
     public DbSet<MessageNotification> Notifications => Set<MessageNotification>();
 
     /// <summary>
+    /// Gets the user blocks.
+    /// </summary>
+    public DbSet<ChatUserBlock> UserBlocks => Set<ChatUserBlock>();
+
+    /// <summary>
     /// Whether the provider can hold the tables in <see cref="Constants.Schema"/>. Providers where a
     /// schema is a database (MySQL) or does not exist (SQLite) return <see langword="false"/>, and
     /// get <see cref="Constants.TablePrefix"/> on every table name instead.

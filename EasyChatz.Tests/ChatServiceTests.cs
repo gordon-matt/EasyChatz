@@ -126,9 +126,123 @@ public sealed class ChatServiceTests
         database.CurrentUser.User = TestDirectory.Alex;
         var removed = await database.Chat.DeleteMessageAsync(latest.Value[^1].Id, cancellationToken);
         Assert.True(removed.IsSuccess);
+        Assert.True(removed.Value!.IsDeleted);
+        Assert.Equal(string.Empty, removed.Value.Content);
+        Assert.Equal("alex", removed.Value.DeletedByUserId);
+        Assert.Equal("Alex Morgan", removed.Value.DeletedByDisplayName);
+        Assert.NotNull(removed.Value.DeletedAtUtc);
 
         var remaining = await database.Chat.GetRoomMessagesAsync(room.Id, take: 10, cancellationToken: cancellationToken);
-        Assert.DoesNotContain(remaining.Value!, m => m.Content == "Message 3");
+        Assert.Equal(3, remaining.Value!.Count);
+        Assert.DoesNotContain(remaining.Value, m => m.Content == "Message 3");
+        var tombstone = remaining.Value.Single(m => m.IsDeleted);
+        Assert.Equal("Alex Morgan", tombstone.DeletedByDisplayName);
+        Assert.Equal(DateTimeKind.Utc, tombstone.DeletedAtUtc!.Value.Kind);
+    }
+
+    [Fact]
+    public async Task Owner_or_administrator_can_archive_a_room_and_nobody_can_post()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+
+        var announcements = (await database.Chat.GetRoomsAsync(cancellationToken)).Value![0];
+        var protectedRoom = await database.Chat.ArchiveRoomAsync(announcements.Id, cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, protectedRoom.Status);
+
+        var room = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
+        database.CurrentUser.User = TestDirectory.Blair;
+        var denied = await database.Chat.ArchiveRoomAsync(room.Id, cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, denied.Status);
+
+        var own = (await database.Chat.CreateRoomAsync("Blair's room", cancellationToken)).Value!;
+        var archivedOwn = await database.Chat.ArchiveRoomAsync(own.Id, cancellationToken);
+        Assert.True(archivedOwn.IsSuccess);
+        Assert.True(archivedOwn.Value!.IsArchived);
+
+        var posted = await database.Chat.SendRoomMessageAsync(own.Id, "hello", cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, posted.Status);
+
+        database.CurrentUser.User = TestDirectory.Alex;
+        var restored = await database.Chat.UnarchiveRoomAsync(own.Id, cancellationToken);
+        Assert.True(restored.IsSuccess);
+        Assert.False(restored.Value!.IsArchived);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var again = await database.Chat.SendRoomMessageAsync(own.Id, "hello", cancellationToken);
+        Assert.True(again.IsSuccess);
+
+        var listed = await database.Chat.GetRoomsAsync(cancellationToken);
+        Assert.Contains(listed.Value!, r => r.Id == own.Id && !r.IsArchived);
+    }
+
+    [Fact]
+    public async Task A_block_stops_direct_messages_until_it_is_removed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+
+        var self = await database.Chat.BlockUserAsync("alex", cancellationToken);
+        Assert.Equal(ResultStatus.Invalid, self.Status);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var blocked = await database.Chat.BlockUserAsync("alex", cancellationToken);
+        Assert.True(blocked.IsSuccess);
+        Assert.True(blocked.Value!.BlockedByMe);
+        Assert.False(blocked.Value.HasBlockedMe);
+
+        var stillTalking = await database.Chat.SendPrivateMessageAsync("alex", "I can still write", cancellationToken);
+        Assert.True(stillTalking.IsSuccess);
+
+        database.CurrentUser.User = TestDirectory.Alex;
+        var denied = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, denied.Status);
+
+        var conversation = await database.Chat.GetConversationAsync("blair", cancellationToken);
+        Assert.False(conversation.Value!.BlockedByMe);
+        Assert.True(conversation.Value.HasBlockedMe);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var cleared = await database.Chat.UnblockUserAsync("alex", cancellationToken);
+        Assert.True(cleared.IsSuccess);
+        Assert.False(cleared.Value!.BlockedByMe);
+
+        database.CurrentUser.User = TestDirectory.Alex;
+        var allowed = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
+        Assert.True(allowed.IsSuccess);
+    }
+
+    [Fact]
+    public async Task Disabled_features_reject_archive_block_and_delete()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync(options =>
+        {
+            options.AllowRoomArchive = false;
+            options.AllowUserBlocks = false;
+            options.AllowMessageDelete = false;
+        });
+
+        var features = await database.Chat.GetFeaturesAsync(cancellationToken);
+        Assert.False(features.Value!.AllowRoomArchive);
+        Assert.False(features.Value.AllowUserBlocks);
+        Assert.False(features.Value.AllowMessageDelete);
+
+        var room = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
+        var archived = await database.Chat.ArchiveRoomAsync(room.Id, cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, archived.Status);
+
+        var posted = await database.Chat.SendRoomMessageAsync(room.Id, "still open", cancellationToken);
+        Assert.True(posted.IsSuccess);
+
+        var blocked = await database.Chat.BlockUserAsync("blair", cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, blocked.Status);
+
+        var sent = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
+        Assert.True(sent.IsSuccess);
+
+        var deleted = await database.Chat.DeleteMessageAsync(posted.Value!.Id, cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, deleted.Status);
     }
     [Fact]
     public async Task Room_mentions_are_rewritten_with_the_real_name_and_unknown_people_become_plain_text()

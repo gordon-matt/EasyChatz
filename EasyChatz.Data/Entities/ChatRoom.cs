@@ -23,6 +23,17 @@ public class ChatRoom : BaseEntity<int>
     /// </summary>
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>An archived room stays readable, accepts no new messages, and is hidden until someone asks to see it.</summary>
+    public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// Gets or sets the archived at utc.
+    /// </summary>
+    public DateTime? ArchivedAtUtc { get; set; }
+
+    /// <summary>The person who archived the room. Cleared when it is restored.</summary>
+    public string? ArchivedByUserId { get; set; }
+
     /// <summary>
     /// Gets or sets the messages.
     /// </summary>
@@ -45,6 +56,8 @@ public class ChatRoomMap : IEntityTypeConfiguration<ChatRoom>
         builder.Property(m => m.Name).IsRequired().HasMaxLength(Constants.MaxLengths.RoomName).IsUnicode(true);
         builder.Property(m => m.AdminUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.CreatedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
+        builder.Property(m => m.ArchivedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
+        builder.Property(m => m.ArchivedByUserId).HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.HasIndex(m => m.Name).IsUnique();
     }
 }

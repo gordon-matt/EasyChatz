@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
             services.AddEasyChatzRepository<ChatRoom>();
             services.AddEasyChatzRepository<ChatMessage>();
             services.AddEasyChatzRepository<MessageNotification>();
+            services.AddEasyChatzRepository<ChatUserBlock>();
 
             services.TryAddSingleton<IChatRealtime, NullChatRealtime>();
             services.TryAddScoped<IChatUserDirectory, FallbackChatUserDirectory>();

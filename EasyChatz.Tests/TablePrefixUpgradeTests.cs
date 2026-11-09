@@ -56,7 +56,7 @@ public class TablePrefixUpgradeTests
         var tables = await context.Database
             .SqlQueryRaw<string>("SELECT name AS \"Value\" FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_\\_%' ESCAPE '\\' AND name <> 'sqlite_sequence' ORDER BY name")
             .ToListAsync(Token);
-        Assert.Equal(["EasyChatz_Messages", "EasyChatz_Notifications", "EasyChatz_Rooms"], tables);
+        Assert.Equal(["EasyChatz_Messages", "EasyChatz_Notifications", "EasyChatz_Rooms", "EasyChatz_UserBlocks"], tables);
 
         var violations = await context.Database
             .SqlQueryRaw<long>("SELECT COUNT(*) AS \"Value\" FROM pragma_foreign_key_check")

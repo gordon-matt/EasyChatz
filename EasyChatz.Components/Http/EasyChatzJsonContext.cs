@@ -20,5 +20,7 @@ namespace EasyChatz.Components.Http;
 [JsonSerializable(typeof(List<ChatPresenceDto>))]
 [JsonSerializable(typeof(SaveRoomRequest))]
 [JsonSerializable(typeof(SendMessageRequest))]
+[JsonSerializable(typeof(ChatFeaturesDto))]
+[JsonSerializable(typeof(ChatBlockChangedDto))]
 [JsonSerializable(typeof(ProblemResponse))]
 internal sealed partial class EasyChatzJsonContext : JsonSerializerContext;

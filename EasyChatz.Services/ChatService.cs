@@ -10,6 +10,7 @@ public sealed partial class ChatService(
     IOptions<EasyChatzOptions> options,
     IRepository<ChatRoom> rooms,
     IRepository<ChatMessage> messages,
+    IRepository<ChatUserBlock> blocks,
     IChatNotificationService notifications,
     IChatUserDirectory directory,
     IChatCurrentUser currentUser,
@@ -26,6 +27,18 @@ public sealed partial class ChatService(
         return actor is null
             ? Result<ChatUser>.Unauthorized("Please sign in to continue.")
             : Result<ChatUser>.Success(actor);
+    }
+
+    /// <summary>
+    /// Gets the features.
+    /// </summary>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat features.</returns>
+    public Task<Result<ChatFeaturesDto>> GetFeaturesAsync(CancellationToken cancellationToken = default)
+    {
+        var value = options.Value;
+        return Task.FromResult(Result<ChatFeaturesDto>.Success(
+            new ChatFeaturesDto(value.AllowRoomArchive, value.AllowUserBlocks, value.AllowMessageDelete)));
     }
 
     /// <summary>
@@ -188,6 +201,24 @@ public sealed partial class ChatService(
     }
 
     /// <summary>
+    /// Archives the room.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room.</returns>
+    public Task<Result<ChatRoomDto>> ArchiveRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
+        SetArchivedAsync(roomId, archived: true, cancellationToken);
+
+    /// <summary>
+    /// Unarchives the room.
+    /// </summary>
+    /// <param name="roomId">The room identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room.</returns>
+    public Task<Result<ChatRoomDto>> UnarchiveRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
+        SetArchivedAsync(roomId, archived: false, cancellationToken);
+
+    /// <summary>
     /// Gets the room messages.
     /// </summary>
     /// <param name="roomId">The room identifier.</param>
@@ -236,6 +267,11 @@ public sealed partial class ChatService(
         if (IsAnnouncements(room.Name) && !actor.Value.IsAdministrator)
         {
             return Result<ChatMessageDto>.Forbidden("Only an administrator can post in Announcements.");
+        }
+
+        if (options.Value.AllowRoomArchive && room.IsArchived)
+        {
+            return Result<ChatMessageDto>.Forbidden("This room is archived.");
         }
 
         var clean = await CleanMessageAsync(content, allowMentions: true, cancellationToken);
@@ -288,11 +324,14 @@ public sealed partial class ChatService(
         var latest = await PartnerActivityAsync(actor.Value.Id, cancellationToken);
         var unread = await UnreadCountsAsync(cancellationToken);
         var people = await directory.FindManyAsync(latest.Select(p => p.UserId), cancellationToken);
+        var blockState = await BlocksBetweenAsync(actor.Value.Id, latest.Select(p => p.UserId), cancellationToken);
 
         return Result<IReadOnlyList<ChatConversationDto>>.Success(latest.Select(p => new ChatConversationDto(
             p.UserId,
             people.TryGetValue(p.UserId, out var person) ? person.DisplayName : p.UserId,
-            unread.GetValueOrDefault(p.UserId))).ToList());
+            unread.GetValueOrDefault(p.UserId),
+            blockState.ByMe.Contains(p.UserId),
+            blockState.ByThem.Contains(p.UserId))).ToList());
     }
 
     /// <summary>
@@ -315,9 +354,7 @@ public sealed partial class ChatService(
             return Result<ChatConversationDto>.NotFound("That person could not be found.");
         }
 
-        var unread = await UnreadCountsAsync(cancellationToken);
-        return Result<ChatConversationDto>.Success(
-            new ChatConversationDto(person.Id, person.DisplayName, unread.GetValueOrDefault(person.Id)));
+        return Result<ChatConversationDto>.Success(await ConversationAsync(actor.Value.Id, person, cancellationToken));
     }
 
     /// <summary>
@@ -379,6 +416,11 @@ public sealed partial class ChatService(
             return Result<ChatMessageDto>.NotFound("That person could not be found.");
         }
 
+        if (options.Value.AllowUserBlocks && await IsBlockedAsync(recipient.Id, actor.Value.Id, cancellationToken))
+        {
+            return Result<ChatMessageDto>.Forbidden("You can't message this person.");
+        }
+
         var clean = await CleanMessageAsync(content, allowMentions: false, cancellationToken);
         if (!clean.IsSuccess)
         {
@@ -401,28 +443,61 @@ public sealed partial class ChatService(
     }
 
     /// <summary>
+    /// Blocks the user.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat conversation.</returns>
+    public Task<Result<ChatConversationDto>> BlockUserAsync(string userId, CancellationToken cancellationToken = default) =>
+        SetBlockedAsync(userId, blocked: true, cancellationToken);
+
+    /// <summary>
+    /// Unblocks the user.
+    /// </summary>
+    /// <param name="userId">The user identifier.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat conversation.</returns>
+    public Task<Result<ChatConversationDto>> UnblockUserAsync(string userId, CancellationToken cancellationToken = default) =>
+        SetBlockedAsync(userId, blocked: false, cancellationToken);
+
+    /// <summary>
     /// Deletes the message.
     /// </summary>
     /// <param name="messageId">The message identifier.</param>
     /// <param name="cancellationToken">A token that can be used to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message removed.</returns>
-    public async Task<Result<ChatMessageRemovedDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default)
+    /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message.</returns>
+    public async Task<Result<ChatMessageDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default)
     {
+        if (!options.Value.AllowMessageDelete)
+        {
+            return Result<ChatMessageDto>.Forbidden("Deleting messages is turned off.");
+        }
+
         var actor = await RequireAsync(cancellationToken);
         if (!actor.IsSuccess)
         {
-            return actor.To<ChatMessageRemovedDto>();
+            return actor.To<ChatMessageDto>();
         }
 
         var message = await messages.FindOneAsync(messageId);
         if (message is null)
         {
-            return Result<ChatMessageRemovedDto>.NotFound("Message not found.");
+            return Result<ChatMessageDto>.NotFound("Message not found.");
         }
 
         if (!string.Equals(message.FromUserId, actor.Value.Id, StringComparison.Ordinal))
         {
-            return Result<ChatMessageRemovedDto>.Forbidden("You can only delete your own messages.");
+            return Result<ChatMessageDto>.Forbidden("You can only delete your own messages.");
+        }
+
+        if (!message.IsDeleted)
+        {
+            message.IsDeleted = true;
+            message.DeletedAtUtc = DateTime.UtcNow;
+            message.DeletedByUserId = actor.Value.Id;
+            message.Content = string.Empty;
+            await messages.UpdateAsync(message, ContextOptions.ForCancellationToken(cancellationToken));
+            logger.LogInformation("User {UserId} deleted message {MessageId}", actor.Value.Id, messageId);
         }
 
         string? roomName = null;
@@ -431,10 +506,16 @@ public sealed partial class ChatService(
             roomName = (await rooms.FindOneAsync(roomId))?.Name;
         }
 
-        var dto = new ChatMessageRemovedDto(message.Id, message.ToRoomId, roomName, message.ToUserId, message.FromUserId);
-        await messages.DeleteAsync(message, ContextOptions.ForCancellationToken(cancellationToken));
-        await realtime.PublishMessageRemovedAsync(dto, cancellationToken);
-        return Result<ChatMessageRemovedDto>.Success(dto);
+        var names = await NamesAsync(
+            new[] { message.FromUserId, message.DeletedByUserId ?? string.Empty }.Where(id => id.Length > 0),
+            cancellationToken);
+        var dto = ToMessage(
+            message,
+            NameOf(names, message.FromUserId),
+            roomName,
+            message.DeletedByUserId is null ? null : NameOf(names, message.DeletedByUserId));
+        await realtime.PublishMessageDeletedAsync(dto, cancellationToken);
+        return Result<ChatMessageDto>.Success(dto);
     }
 
     /// <summary>
@@ -464,6 +545,171 @@ public sealed partial class ChatService(
             .ToList();
 
         return Result<IReadOnlyList<ChatMentionDto>>.Success(people);
+    }
+
+    private async Task<Result<ChatRoomDto>> SetArchivedAsync(int roomId, bool archived, CancellationToken cancellationToken)
+    {
+        if (!options.Value.AllowRoomArchive)
+        {
+            return Result<ChatRoomDto>.Forbidden("Archiving rooms is turned off.");
+        }
+
+        var actor = await RequireAsync(cancellationToken);
+        if (!actor.IsSuccess)
+        {
+            return actor.To<ChatRoomDto>();
+        }
+
+        var room = await rooms.FindOneAsync(roomId);
+        if (room is null)
+        {
+            return Result<ChatRoomDto>.NotFound("Room not found.");
+        }
+
+        if (IsAnnouncements(room.Name))
+        {
+            return Result<ChatRoomDto>.Forbidden("Announcements can't be archived.");
+        }
+
+        if (!actor.Value.IsAdministrator && !string.Equals(room.AdminUserId, actor.Value.Id, StringComparison.Ordinal))
+        {
+            return Result<ChatRoomDto>.Forbidden(archived
+                ? "Only the room owner or an administrator can archive it."
+                : "Only the room owner or an administrator can restore it.");
+        }
+
+        if (room.IsArchived != archived)
+        {
+            room.IsArchived = archived;
+            room.ArchivedAtUtc = archived ? DateTime.UtcNow : null;
+            room.ArchivedByUserId = archived ? actor.Value.Id : null;
+            await rooms.UpdateAsync(room, ContextOptions.ForCancellationToken(cancellationToken));
+            logger.LogInformation(
+                "User {UserId} {Action} room {RoomId}",
+                actor.Value.Id,
+                archived ? "archived" : "restored",
+                roomId);
+        }
+
+        var names = await NamesAsync([room.AdminUserId], cancellationToken);
+        var dto = ToRoom(room, names);
+        await realtime.PublishRoomArchivedAsync(dto, cancellationToken);
+        return Result<ChatRoomDto>.Success(dto);
+    }
+
+    private async Task<Result<ChatConversationDto>> SetBlockedAsync(string userId, bool blocked, CancellationToken cancellationToken)
+    {
+        if (!options.Value.AllowUserBlocks)
+        {
+            return Result<ChatConversationDto>.Forbidden("Blocking people is turned off.");
+        }
+
+        var actor = await RequireAsync(cancellationToken);
+        if (!actor.IsSuccess)
+        {
+            return actor.To<ChatConversationDto>();
+        }
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Result<ChatConversationDto>.Invalid(new ValidationError(nameof(userId), "Choose someone to block."));
+        }
+
+        if (string.Equals(userId, actor.Value.Id, StringComparison.Ordinal))
+        {
+            return Result<ChatConversationDto>.Invalid(new ValidationError(nameof(userId), "You can't block yourself."));
+        }
+
+        var person = await directory.FindAsync(userId, cancellationToken);
+        if (person is null)
+        {
+            return Result<ChatConversationDto>.NotFound("That person could not be found.");
+        }
+
+        var existing = (await blocks.FindAsync(new SearchOptions<ChatUserBlock>
+        {
+            Query = b => b.BlockerUserId == actor.Value.Id && b.BlockedUserId == person.Id,
+            CancellationToken = cancellationToken,
+        })).FirstOrDefault();
+
+        if (blocked && existing is null)
+        {
+            await blocks.InsertAsync(new ChatUserBlock
+            {
+                BlockerUserId = actor.Value.Id,
+                BlockedUserId = person.Id,
+                CreatedAtUtc = DateTime.UtcNow,
+            }, ContextOptions.ForCancellationToken(cancellationToken));
+            logger.LogInformation("User {UserId} blocked {BlockedUserId}", actor.Value.Id, person.Id);
+        }
+        else if (!blocked && existing is not null)
+        {
+            await blocks.DeleteAsync(existing, ContextOptions.ForCancellationToken(cancellationToken));
+            logger.LogInformation("User {UserId} unblocked {BlockedUserId}", actor.Value.Id, person.Id);
+        }
+
+        await realtime.PublishUserBlockChangedAsync(
+            new ChatBlockChangedDto(actor.Value.Id, person.Id, blocked),
+            cancellationToken);
+
+        return Result<ChatConversationDto>.Success(await ConversationAsync(actor.Value.Id, person, cancellationToken));
+    }
+
+    private async Task<bool> IsBlockedAsync(string blockerUserId, string blockedUserId, CancellationToken cancellationToken) =>
+        await blocks.ExistsAsync(
+            b => b.BlockerUserId == blockerUserId && b.BlockedUserId == blockedUserId,
+            ContextOptions.ForCancellationToken(cancellationToken));
+
+    private async Task<ChatConversationDto> ConversationAsync(string userId, ChatUser person, CancellationToken cancellationToken)
+    {
+        var unread = await UnreadCountsAsync(cancellationToken);
+        var blockState = await BlocksBetweenAsync(userId, [person.Id], cancellationToken);
+        return new ChatConversationDto(
+            person.Id,
+            person.DisplayName,
+            unread.GetValueOrDefault(person.Id),
+            blockState.ByMe.Contains(person.Id),
+            blockState.ByThem.Contains(person.Id));
+    }
+
+    private async Task<BlockSets> BlocksBetweenAsync(string userId, IEnumerable<string> otherUserIds, CancellationToken cancellationToken)
+    {
+        if (!options.Value.AllowUserBlocks)
+        {
+            return BlockSets.None;
+        }
+
+        var others = otherUserIds
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (others.Count == 0)
+        {
+            return BlockSets.None;
+        }
+
+        var rows = await blocks.FindAsync(new SearchOptions<ChatUserBlock>
+        {
+            Query = b => (b.BlockerUserId == userId && others.Contains(b.BlockedUserId))
+                || (b.BlockedUserId == userId && others.Contains(b.BlockerUserId)),
+            CancellationToken = cancellationToken,
+        });
+
+        var byMe = new HashSet<string>(StringComparer.Ordinal);
+        var byThem = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            if (string.Equals(row.BlockerUserId, userId, StringComparison.Ordinal))
+            {
+                byMe.Add(row.BlockedUserId);
+            }
+            else
+            {
+                byThem.Add(row.BlockerUserId);
+            }
+        }
+
+        return new BlockSets(byMe, byThem);
     }
 
     private async Task<Result<ChatUser>> RequireAsync(CancellationToken cancellationToken)
@@ -561,8 +807,14 @@ public sealed partial class ChatService(
 
     private async Task<IReadOnlyList<ChatMessageDto>> MapAsync(IReadOnlyList<ChatMessage> page, string? roomName, CancellationToken cancellationToken)
     {
-        var names = await NamesAsync(page.Select(m => m.FromUserId), cancellationToken);
-        return page.Select(m => ToMessage(m, NameOf(names, m.FromUserId), roomName)).ToList();
+        var names = await NamesAsync(
+            page.SelectMany(m => new[] { m.FromUserId, m.DeletedByUserId ?? string.Empty }).Where(id => id.Length > 0),
+            cancellationToken);
+        return page.Select(m => ToMessage(
+            m,
+            NameOf(names, m.FromUserId),
+            roomName,
+            m.DeletedByUserId is null ? null : NameOf(names, m.DeletedByUserId))).ToList();
     }
 
     private async Task<IReadOnlyDictionary<string, string>> NamesAsync(IEnumerable<string> userIds, CancellationToken cancellationToken)
@@ -583,10 +835,22 @@ public sealed partial class ChatService(
     }
 
     private ChatRoomDto ToRoom(ChatRoom room, IReadOnlyDictionary<string, string> names) =>
-        new(room.Id, room.Name, room.AdminUserId, NameOf(names, room.AdminUserId));
+        new(room.Id, room.Name, room.AdminUserId, NameOf(names, room.AdminUserId), room.IsArchived);
 
-    private static ChatMessageDto ToMessage(ChatMessage message, string fromDisplayName, string? roomName) =>
-        new(message.Id, message.Content, message.Timestamp, message.FromUserId, fromDisplayName, message.ToRoomId, roomName, message.ToUserId);
+    private static ChatMessageDto ToMessage(ChatMessage message, string fromDisplayName, string? roomName, string? deletedByDisplayName = null) =>
+        new(
+            message.Id,
+            message.IsDeleted ? string.Empty : message.Content,
+            message.Timestamp,
+            message.FromUserId,
+            fromDisplayName,
+            message.ToRoomId,
+            roomName,
+            message.ToUserId,
+            message.IsDeleted,
+            message.IsDeleted ? message.DeletedByUserId : null,
+            message.IsDeleted ? deletedByDisplayName : null,
+            message.IsDeleted ? message.DeletedAtUtc : null);
 
     private async Task<List<PartnerActivity>> PartnerActivityAsync(string userId, CancellationToken cancellationToken)
     {
@@ -623,4 +887,9 @@ public sealed partial class ChatService(
     private sealed record PartnerRow(string FromUserId, string ToUserId, DateTime Timestamp);
 
     private sealed record PartnerActivity(string UserId, DateTime Timestamp);
+
+    private sealed record BlockSets(HashSet<string> ByMe, HashSet<string> ByThem)
+    {
+        public static BlockSets None { get; } = new(new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal));
+    }
 }

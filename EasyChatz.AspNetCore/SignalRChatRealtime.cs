@@ -71,4 +71,31 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
         await hub.Clients.Group(room.RoomName).SendAsync(Constants.HubEvents.RoomDeleted, room, cancellationToken);
         await hub.Clients.All.SendAsync(Constants.HubEvents.RemoveRoom, room, cancellationToken);
     }
+
+    public async Task PublishMessageDeletedAsync(ChatMessageDto message, CancellationToken cancellationToken = default)
+    {
+        if (message.ToRoomId is not null && !string.IsNullOrEmpty(message.ToRoomName))
+        {
+            await hub.Clients.Group(message.ToRoomName).SendAsync(Constants.HubEvents.MessageDeleted, message, cancellationToken);
+            return;
+        }
+
+        await UserAsync(message.FromUserId, Constants.HubEvents.MessageDeleted, message, cancellationToken);
+        if (!string.IsNullOrEmpty(message.ToUserId))
+        {
+            await UserAsync(message.ToUserId, Constants.HubEvents.MessageDeleted, message, cancellationToken);
+        }
+    }
+
+    public Task PublishRoomArchivedAsync(ChatRoomDto room, CancellationToken cancellationToken = default) =>
+        hub.Clients.All.SendAsync(Constants.HubEvents.ArchiveRoom, room, cancellationToken);
+
+    public async Task PublishUserBlockChangedAsync(ChatBlockChangedDto change, CancellationToken cancellationToken = default)
+    {
+        await UserAsync(change.BlockerUserId, Constants.HubEvents.UserBlockChanged, change, cancellationToken);
+        if (!string.Equals(change.BlockedUserId, change.BlockerUserId, StringComparison.Ordinal))
+        {
+            await UserAsync(change.BlockedUserId, Constants.HubEvents.UserBlockChanged, change, cancellationToken);
+        }
+    }
 }

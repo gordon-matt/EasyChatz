@@ -37,6 +37,12 @@ public static class EndpointRouteBuilderExtensions
             group.MapDelete(ApiRoutes.Room, async (int roomId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.DeleteRoomAsync(roomId, cancellationToken)).ToHttpResult());
 
+            group.MapPost(ApiRoutes.RoomArchive, async (int roomId, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.ArchiveRoomAsync(roomId, cancellationToken)).ToHttpResult());
+
+            group.MapDelete(ApiRoutes.RoomArchive, async (int roomId, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.UnarchiveRoomAsync(roomId, cancellationToken)).ToHttpResult());
+
             group.MapGet(ApiRoutes.RoomMessages, async (int roomId, int? take, int? beforeId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.GetRoomMessagesAsync(roomId, take, beforeId, cancellationToken)).ToHttpResult());
 
@@ -52,8 +58,17 @@ public static class EndpointRouteBuilderExtensions
             group.MapGet(ApiRoutes.ConversationMessages, async (string userId, int? take, int? beforeId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.GetPrivateMessagesAsync(userId, take, beforeId, cancellationToken)).ToHttpResult());
 
+            group.MapPost(ApiRoutes.ConversationBlock, async (string userId, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.BlockUserAsync(userId, cancellationToken)).ToHttpResult());
+
+            group.MapDelete(ApiRoutes.ConversationBlock, async (string userId, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.UnblockUserAsync(userId, cancellationToken)).ToHttpResult());
+
             group.MapDelete(ApiRoutes.Message, async (int messageId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.DeleteMessageAsync(messageId, cancellationToken)).ToHttpResult());
+
+            group.MapGet(ApiRoutes.Features, async (IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.GetFeaturesAsync(cancellationToken)).ToHttpResult());
 
             group.MapGet(ApiRoutes.Mentions, async (string? q, int? take, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.SearchMentionsAsync(q, take ?? 8, cancellationToken)).ToHttpResult());

@@ -23,6 +23,12 @@
                             <Icon Name="users" />
                         </button>
                     }
+                    @if (features.AllowRoomArchive)
+                    {
+                        <button type="button" class="ec-icon-button" title="@(showArchived ? "Hide archived" : "Show archived")" aria-pressed="@showArchived" @onclick="() => showArchived = !showArchived">
+                            <Icon Name="archive" />
+                        </button>
+                    }
                     @if (me.CanCreateRooms)
                     {
                         <button type="button" class="ec-icon-button" title="New room" @onclick="OpenNewRoom">
@@ -38,7 +44,7 @@
                     <p class="ec-nav-label">Rooms</p>
                     @if (!VisibleRooms.Any())
                     {
-                        <p class="ec-empty">No rooms yet.</p>
+                        <p class="ec-empty">@(rooms.Count == 0 ? "No rooms yet." : "No rooms to show.")</p>
                     }
                     @foreach (var room in VisibleRooms)
                     {
@@ -52,6 +58,10 @@
                                 <span class="ec-nav-title">@room.Name</span>
                                 <span class="ec-nav-meta">@room.AdminDisplayName</span>
                             </span>
+                            @if (features.AllowRoomArchive && room.IsArchived)
+                            {
+                                <span class="ec-nav-mark" title="Archived"><Icon Name="archive" /></span>
+                            }
                             @if (unread > 0 && !active)
                             {
                                 <span class="ec-badge @(roomMentioned.Contains(room.Id) ? "ec-badge-mention" : null)" title="@(roomMentioned.Contains(room.Id) ? "You were mentioned" : null)">@(roomMentioned.Contains(room.Id) ? $"@{unread}" : unread.ToString())</span>
@@ -72,6 +82,10 @@
                             <span class="ec-nav-copy">
                                 <span class="ec-nav-title">@conversation.DisplayName</span>
                             </span>
+                            @if (features.AllowUserBlocks && (conversation.BlockedByMe || conversation.HasBlockedMe))
+                            {
+                                <span class="ec-nav-mark" title="@(conversation.BlockedByMe ? "Blocked" : "Can't message")"><Icon Name="ban" /></span>
+                            }
                             @if (conversation.UnreadCount > 0 && !active)
                             {
                                 <span class="ec-badge">@conversation.UnreadCount</span>
@@ -105,9 +119,21 @@
                         </span>
                         <div class="ec-thread-title">
                             <strong>@(activeRoom?.Name ?? activeConversation!.DisplayName)</strong>
-                            <span>@(activeRoom is not null ? $"Started by {activeRoom.AdminDisplayName}" : "Direct message")</span>
+                            <span>@(activeRoom is not null ? RoomSubtitle(activeRoom) : "Direct message")</span>
                         </div>
                         <span class="ec-spacer"></span>
+                        @if (CanArchiveRoom)
+                        {
+                            <button type="button" class="ec-icon-button" title="@(activeRoom!.IsArchived ? "Restore room" : "Archive room")" aria-pressed="@activeRoom.IsArchived" @onclick="ToggleArchiveAsync">
+                                <Icon Name="archive" />
+                            </button>
+                        }
+                        @if (CanBlock)
+                        {
+                            <button type="button" class="ec-icon-button" title="@(activeConversation!.BlockedByMe ? "Unblock" : "Block")" aria-pressed="@activeConversation.BlockedByMe" @onclick="ToggleBlockAsync">
+                                <Icon Name="ban" />
+                            </button>
+                        }
                         @if (CanRename)
                         {
                             <button type="button" class="ec-icon-button" title="Rename room" @onclick="OpenRename"><Icon Name="pencil" /></button>
@@ -149,9 +175,16 @@
                                     {
                                         <span class="ec-author">@message.FromDisplayName</span>
                                     }
-                                    <p>@RenderContent(message)</p>
+                                    @if (message.IsDeleted)
+                                    {
+                                        <p class="ec-deleted">@DeletedLabel(message)</p>
+                                    }
+                                    else
+                                    {
+                                        <p>@RenderContent(message)</p>
+                                    }
                                     <time datetime="@message.Timestamp.ToString("o")">@local.ToString("t")</time>
-                                    @if (mine)
+                                    @if (CanDeleteMessage(message))
                                     {
                                         <button type="button" class="ec-icon-button ec-delete" title="Delete message" @onclick="() => DeleteMessageAsync(message.Id)">
                                             <Icon Name="trash" />
@@ -162,10 +195,14 @@
                         }
                     </div>
 
+                    @if (features.AllowUserBlocks && activeConversation is { BlockedByMe: true, HasBlockedMe: false })
+                    {
+                        <p class="ec-hint ec-block-note">You blocked @activeConversation.DisplayName. They can't message you.</p>
+                    }
                     <form class="ec-composer" @onsubmit="SendAsync" @onsubmit:preventDefault>
                         @if (ReadOnlyThread)
                         {
-                            <p class="ec-hint">Only an administrator can post in @activeRoom!.Name.</p>
+                            <p class="ec-hint">@ReadOnlyHint</p>
                         }
                         else
                         {

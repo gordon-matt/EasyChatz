@@ -52,4 +52,22 @@ public sealed class EasyChatzOptions
     /// Gets or sets the max page size.
     /// </summary>
     public int MaxPageSize { get; set; } = 200;
+
+    /// <summary>
+    /// When set, a room's owner or an administrator can archive it. Archived rooms stay readable,
+    /// accept no new messages, and stay out of the room list until someone asks to see them.
+    /// </summary>
+    public bool AllowRoomArchive { get; set; } = true;
+
+    /// <summary>
+    /// When set, a person can stop another person from sending them direct messages, and can undo that later.
+    /// Room messages are not affected. Turning this off also stops existing blocks from being enforced.
+    /// </summary>
+    public bool AllowUserBlocks { get; set; } = true;
+
+    /// <summary>
+    /// When set, the author of a message can delete it. The thread keeps a note of who deleted it and when,
+    /// including for messages deleted before this was turned off.
+    /// </summary>
+    public bool AllowMessageDelete { get; set; } = true;
 }

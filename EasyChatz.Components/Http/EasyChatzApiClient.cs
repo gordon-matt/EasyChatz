@@ -26,6 +26,9 @@ internal sealed class EasyChatzApiClient(HttpClient http)
     public Task<Result> SendAsync(HttpMethod method, string url, CancellationToken cancellationToken) =>
         SendWithoutBodyAsync(() => new HttpRequestMessage(method, url), cancellationToken);
 
+    public Task<Result<T>> SendAsync<T>(HttpMethod method, string url, JsonTypeInfo<T> type, CancellationToken cancellationToken) =>
+        SendAsync(() => new HttpRequestMessage(method, url), type, cancellationToken);
+
     public Task<Result<T>> DeleteAsync<T>(string url, JsonTypeInfo<T> type, CancellationToken cancellationToken) =>
         SendAsync(() => new HttpRequestMessage(HttpMethod.Delete, url), type, cancellationToken);
 

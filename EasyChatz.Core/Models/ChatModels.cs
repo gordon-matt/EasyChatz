@@ -13,11 +13,13 @@ public sealed record ChatUser(string Id, string DisplayName, bool IsAdministrato
 /// <param name="Name">The name.</param>
 /// <param name="AdminUserId">The admin user identifier.</param>
 /// <param name="AdminDisplayName">The admin display name.</param>
+/// <param name="IsArchived">Whether the room is archived.</param>
 public sealed record ChatRoomDto(
     int Id,
     string Name,
     string AdminUserId,
-    string AdminDisplayName);
+    string AdminDisplayName,
+    bool IsArchived = false);
 
 /// <summary>
 /// Represents the chat room updated DTO.
@@ -52,6 +54,10 @@ public sealed record ChatRoomRemovedDto(int RoomId, string RoomName);
 /// <param name="ToRoomId">The to room identifier.</param>
 /// <param name="ToRoomName">The to room name.</param>
 /// <param name="ToUserId">The to user identifier.</param>
+/// <param name="IsDeleted">Whether the message was deleted.</param>
+/// <param name="DeletedByUserId">The deleted by user identifier.</param>
+/// <param name="DeletedByDisplayName">The deleted by display name.</param>
+/// <param name="DeletedAtUtc">The deleted at utc.</param>
 public sealed record ChatMessageDto(
     int Id,
     string Content,
@@ -60,7 +66,11 @@ public sealed record ChatMessageDto(
     string FromDisplayName,
     int? ToRoomId,
     string? ToRoomName,
-    string? ToUserId);
+    string? ToUserId,
+    bool IsDeleted = false,
+    string? DeletedByUserId = null,
+    string? DeletedByDisplayName = null,
+    DateTime? DeletedAtUtc = null);
 
 /// <summary>
 /// Represents the chat message removed DTO.
@@ -78,7 +88,29 @@ public sealed record ChatMessageRemovedDto(int MessageId, int? RoomId, string? R
 /// <param name="UserId">The user identifier.</param>
 /// <param name="DisplayName">The display name.</param>
 /// <param name="UnreadCount">The unread count.</param>
-public sealed record ChatConversationDto(string UserId, string DisplayName, int UnreadCount);
+/// <param name="BlockedByMe">Whether the signed-in user blocked this person.</param>
+/// <param name="HasBlockedMe">Whether this person blocked the signed-in user.</param>
+public sealed record ChatConversationDto(
+    string UserId,
+    string DisplayName,
+    int UnreadCount,
+    bool BlockedByMe = false,
+    bool HasBlockedMe = false);
+
+/// <summary>
+/// Which optional actions the host has switched on. The service rejects an action that is off,
+/// and the component hides it.
+/// </summary>
+/// <param name="AllowRoomArchive">Whether room archive is available.</param>
+/// <param name="AllowUserBlocks">Whether direct-message blocks are available.</param>
+/// <param name="AllowMessageDelete">Whether message delete is available.</param>
+public sealed record ChatFeaturesDto(bool AllowRoomArchive, bool AllowUserBlocks, bool AllowMessageDelete);
+
+/// <summary>A direct-message block was added or removed. IsBlocked is false when it was removed.</summary>
+/// <param name="BlockerUserId">The person who blocked.</param>
+/// <param name="BlockedUserId">The person who was blocked.</param>
+/// <param name="IsBlocked">Whether the block is in place.</param>
+public sealed record ChatBlockChangedDto(string BlockerUserId, string BlockedUserId, bool IsBlocked);
 
 /// <summary>
 /// An unread direct message that no host channel (email, push, anything else) has taken yet.

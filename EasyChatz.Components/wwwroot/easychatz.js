@@ -47,7 +47,10 @@ export async function connect(sessionId, hubUrl, includeCredentials, dotNetRef) 
     connection.on('newMessage', message => { raise('OnRoomMessage', message); });
     connection.on('newPrivateMessage', message => { raise('OnPrivateMessage', message); });
     connection.on('removeChatMessage', message => { raise('OnMessageRemoved', message); });
+    connection.on('messageDeleted', message => { raise('OnMessageDeleted', message); });
     connection.on('addChatRoom', room => { raise('OnRoomAdded', room); });
+    connection.on('archiveChatRoom', room => { raise('OnRoomArchived', room); });
+    connection.on('userBlockChanged', change => { raise('OnUserBlocked', change); });
     connection.on('updateChatRoom', room => { raise('OnRoomUpdated', room); });
     connection.on('removeChatRoom', room => { raise('OnRoomRemoved', room); });
     connection.on('onRoomDeleted', room => { raise('OnRoomDeleted', room); });

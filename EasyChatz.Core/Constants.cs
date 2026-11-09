@@ -72,6 +72,10 @@ public static class Constants
         /// The notifications constant.
         /// </summary>
         public const string Notifications = "Notifications";
+        /// <summary>
+        /// The user blocks constant.
+        /// </summary>
+        public const string UserBlocks = "UserBlocks";
     }
 
     /// <summary>
@@ -185,6 +189,18 @@ public static class Constants
         /// The unread changed constant.
         /// </summary>
         public const string UnreadChanged = "unreadChanged";
+        /// <summary>
+        /// The message deleted constant.
+        /// </summary>
+        public const string MessageDeleted = "messageDeleted";
+        /// <summary>
+        /// The archive room constant.
+        /// </summary>
+        public const string ArchiveRoom = "archiveChatRoom";
+        /// <summary>
+        /// The user block changed constant.
+        /// </summary>
+        public const string UserBlockChanged = "userBlockChanged";
     }
 
     /// <summary>

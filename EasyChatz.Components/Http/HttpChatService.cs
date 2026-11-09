@@ -7,6 +7,9 @@ internal sealed class HttpChatService(EasyChatzApiClient api) : IChatService
     public Task<Result<ChatUser>> GetCurrentUserAsync(CancellationToken cancellationToken = default) =>
         api.GetAsync(ApiRoutes.Me, Json.ChatUser, cancellationToken);
 
+    public Task<Result<ChatFeaturesDto>> GetFeaturesAsync(CancellationToken cancellationToken = default) =>
+        api.GetAsync(ApiRoutes.Features, Json.ChatFeaturesDto, cancellationToken);
+
     public async Task<Result<IReadOnlyList<ChatRoomDto>>> GetRoomsAsync(CancellationToken cancellationToken = default) =>
         (await api.GetAsync(ApiRoutes.Rooms, Json.ListChatRoomDto, cancellationToken)).MapList();
 
@@ -21,6 +24,12 @@ internal sealed class HttpChatService(EasyChatzApiClient api) : IChatService
 
     public Task<Result<ChatRoomRemovedDto>> DeleteRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
         api.DeleteAsync($"rooms/{roomId}", Json.ChatRoomRemovedDto, cancellationToken);
+
+    public Task<Result<ChatRoomDto>> ArchiveRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
+        api.SendAsync(HttpMethod.Post, $"rooms/{roomId}/archive", Json.ChatRoomDto, cancellationToken);
+
+    public Task<Result<ChatRoomDto>> UnarchiveRoomAsync(int roomId, CancellationToken cancellationToken = default) =>
+        api.DeleteAsync($"rooms/{roomId}/archive", Json.ChatRoomDto, cancellationToken);
 
     public async Task<Result<IReadOnlyList<ChatMessageDto>>> GetRoomMessagesAsync(int roomId, int? take = null, int? beforeId = null, CancellationToken cancellationToken = default) =>
         (await api.GetAsync(Page($"rooms/{roomId}/messages", take, beforeId), Json.ListChatMessageDto, cancellationToken)).MapList();
@@ -40,8 +49,14 @@ internal sealed class HttpChatService(EasyChatzApiClient api) : IChatService
     public Task<Result<ChatMessageDto>> SendPrivateMessageAsync(string toUserId, string content, CancellationToken cancellationToken = default) =>
         Task.FromResult(Result<ChatMessageDto>.Error("Direct messages are sent through the chat hub."));
 
-    public Task<Result<ChatMessageRemovedDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default) =>
-        api.DeleteAsync($"messages/{messageId}", Json.ChatMessageRemovedDto, cancellationToken);
+    public Task<Result<ChatConversationDto>> BlockUserAsync(string userId, CancellationToken cancellationToken = default) =>
+        api.SendAsync(HttpMethod.Post, $"conversations/{Uri.EscapeDataString(userId)}/block", Json.ChatConversationDto, cancellationToken);
+
+    public Task<Result<ChatConversationDto>> UnblockUserAsync(string userId, CancellationToken cancellationToken = default) =>
+        api.DeleteAsync($"conversations/{Uri.EscapeDataString(userId)}/block", Json.ChatConversationDto, cancellationToken);
+
+    public Task<Result<ChatMessageDto>> DeleteMessageAsync(int messageId, CancellationToken cancellationToken = default) =>
+        api.DeleteAsync($"messages/{messageId}", Json.ChatMessageDto, cancellationToken);
 
     public async Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default) =>
         (await api.GetAsync($"{ApiRoutes.Mentions}?q={Uri.EscapeDataString(term ?? string.Empty)}&take={take}", Json.ListChatMentionDto, cancellationToken)).MapList();

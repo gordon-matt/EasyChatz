@@ -59,6 +59,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private string renameName = string.Empty;
     private string? error;
     private string? appliedWithUserId;
+    private bool showArchived;
+    private ChatFeaturesDto features = new(false, false, false);
 
     [Inject]
     private IChatService ChatService { get; set; } = default!;
@@ -138,7 +140,17 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     private bool CanSend => !busy && !string.IsNullOrWhiteSpace(draft) && !ReadOnlyThread;
 
-    private bool ReadOnlyThread => activeRoom is not null && IsAnnouncements(activeRoom) && me?.IsAdministrator != true;
+    private bool ReadOnlyThread =>
+        (features.AllowRoomArchive && activeRoom is { IsArchived: true })
+        || (features.AllowUserBlocks && activeConversation is { HasBlockedMe: true })
+        || (activeRoom is not null && IsAnnouncements(activeRoom) && me?.IsAdministrator != true);
+
+    private string ReadOnlyHint =>
+        features.AllowRoomArchive && activeRoom is { IsArchived: true }
+            ? "This room is archived. Nobody can post."
+            : features.AllowUserBlocks && activeConversation is { HasBlockedMe: true }
+                ? "You can't message this person."
+                : $"Only an administrator can post in {activeRoom?.Name}.";
 
     private bool CanRename => activeRoom is not null && me is not null && !IsAnnouncements(activeRoom)
         && string.Equals(activeRoom.AdminUserId, me.Id, StringComparison.Ordinal);
@@ -146,9 +158,34 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private bool CanDeleteRoom => activeRoom is not null && me is not null && !IsAnnouncements(activeRoom)
         && (me.IsAdministrator || string.Equals(activeRoom.AdminUserId, me.Id, StringComparison.Ordinal));
 
-    private IEnumerable<ChatRoomDto> VisibleRooms => string.IsNullOrWhiteSpace(filter)
-        ? rooms
-        : rooms.Where(r => r.Name.Contains(filter.Trim(), StringComparison.OrdinalIgnoreCase));
+    private bool CanArchiveRoom => features.AllowRoomArchive && activeRoom is not null && me is not null && !IsAnnouncements(activeRoom)
+        && (me.IsAdministrator || string.Equals(activeRoom.AdminUserId, me.Id, StringComparison.Ordinal));
+
+    private bool CanBlock => features.AllowUserBlocks && activeConversation is not null && me is not null
+        && !string.Equals(activeConversation.UserId, me.Id, StringComparison.Ordinal);
+
+    private bool CanDeleteMessage(ChatMessageDto message) =>
+        features.AllowMessageDelete
+        && !message.IsDeleted
+        && me is not null
+        && string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal);
+
+    private IEnumerable<ChatRoomDto> VisibleRooms
+    {
+        get
+        {
+            IEnumerable<ChatRoomDto> source = features.AllowRoomArchive && !showArchived
+                ? rooms.Where(r => !r.IsArchived)
+                : rooms;
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                return source;
+            }
+
+            string term = filter.Trim();
+            return source.Where(r => r.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+    }
 
     private IEnumerable<ChatConversationDto> VisibleConversations => string.IsNullOrWhiteSpace(filter)
         ? conversations
@@ -167,6 +204,12 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         {
             error = current.GetDisplayMessage();
             return;
+        }
+
+        var featureResult = await ChatService.GetFeaturesAsync();
+        if (featureResult.IsSuccess && featureResult.Value is not null)
+        {
+            features = featureResult.Value;
         }
 
         me = current.Value;
@@ -427,7 +470,9 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         ResetThread();
         await Notifications.MarkReadAsync(conversation.UserId);
         await ReloadConversationsAsync();
-        ReplaceConversation(conversation with { UnreadCount = 0 });
+        var saved = conversations.FirstOrDefault(c => string.Equals(c.UserId, conversation.UserId, StringComparison.Ordinal)) ?? conversation;
+        activeConversation = saved with { UnreadCount = 0 };
+        ReplaceConversation(activeConversation);
         await LoadMessagesAsync(beforeId: null, older: false);
         await PublishConversationAsync(new ChatConversationEvent("private", conversation.UserId, conversation.DisplayName));
     }
@@ -451,15 +496,8 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     private async Task MessagePersonAsync(ChatPresenceDto person)
     {
-        var existing = conversations.FirstOrDefault(c => string.Equals(c.UserId, person.UserId, StringComparison.Ordinal));
-        var conversation = existing ?? new ChatConversationDto(person.UserId, person.DisplayName, 0);
-        if (existing is null)
-        {
-            conversations.Insert(0, conversation);
-        }
-
         peopleOpen = false;
-        await OpenConversationAsync(conversation);
+        await OpenWithUserAsync(person.UserId);
     }
 
     private void ResetThread()
@@ -710,13 +748,55 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private async Task DeleteMessageAsync(int messageId)
     {
         var deleted = await ChatService.DeleteMessageAsync(messageId);
-        if (!deleted.IsSuccess)
+        if (!deleted.IsSuccess || deleted.Value is null)
         {
             error = deleted.GetDisplayMessage();
             return;
         }
 
-        messages.RemoveAll(m => m.Id == messageId);
+        ReplaceMessage(deleted.Value);
+    }
+
+    private async Task ToggleArchiveAsync()
+    {
+        if (activeRoom is null)
+        {
+            return;
+        }
+
+        var result = activeRoom.IsArchived
+            ? await ChatService.UnarchiveRoomAsync(activeRoom.Id)
+            : await ChatService.ArchiveRoomAsync(activeRoom.Id);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            error = result.GetDisplayMessage();
+            return;
+        }
+
+        error = null;
+        composerBound = false;
+        UpsertRoom(result.Value);
+    }
+
+    private async Task ToggleBlockAsync()
+    {
+        if (activeConversation is null)
+        {
+            return;
+        }
+
+        var result = activeConversation.BlockedByMe
+            ? await ChatService.UnblockUserAsync(activeConversation.UserId)
+            : await ChatService.BlockUserAsync(activeConversation.UserId);
+        if (!result.IsSuccess || result.Value is null)
+        {
+            error = result.GetDisplayMessage();
+            return;
+        }
+
+        error = null;
+        composerBound = false;
+        ReplaceConversation(result.Value);
     }
 
     private void OpenNewRoom()
@@ -889,6 +969,76 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
+    /// Handles the message deleted event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [JSInvokable]
+    public Task OnMessageDeleted(string json)
+    {
+        var message = Read(json, EasyChatzJsonContext.Default.ChatMessageDto);
+        if (message is null || !IsOpenThread(message))
+        {
+            return Task.CompletedTask;
+        }
+
+        ReplaceMessage(message);
+        return RenderAsync();
+    }
+
+    /// <summary>
+    /// Handles the room archived event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [JSInvokable]
+    public Task OnRoomArchived(string json)
+    {
+        var room = Read(json, EasyChatzJsonContext.Default.ChatRoomDto);
+        if (room is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (activeRoom?.Id == room.Id)
+        {
+            composerBound = false;
+        }
+
+        UpsertRoom(room);
+        return RenderAsync();
+    }
+
+    /// <summary>
+    /// Handles the user blocked event.
+    /// </summary>
+    /// <param name="json">The JSON.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    [JSInvokable]
+    public Task OnUserBlocked(string json)
+    {
+        var change = Read(json, EasyChatzJsonContext.Default.ChatBlockChangedDto);
+        if (change is null || me is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (string.Equals(change.BlockerUserId, me.Id, StringComparison.Ordinal))
+        {
+            UpdateBlock(change.BlockedUserId, blockedByMe: change.IsBlocked, hasBlockedMe: null);
+            return RenderAsync();
+        }
+
+        if (string.Equals(change.BlockedUserId, me.Id, StringComparison.Ordinal))
+        {
+            UpdateBlock(change.BlockerUserId, blockedByMe: null, hasBlockedMe: change.IsBlocked);
+            return RenderAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Handles the room added event.
     /// </summary>
     /// <param name="json">The JSON.</param>
@@ -1051,7 +1201,9 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     private void ApplyRename(ChatRoomUpdatedDto room)
     {
-        var dto = new ChatRoomDto(room.Id, room.Name, room.AdminUserId, room.AdminDisplayName);
+        bool archived = rooms.FirstOrDefault(r => r.Id == room.Id)?.IsArchived
+            ?? (activeRoom?.Id == room.Id && activeRoom.IsArchived);
+        var dto = new ChatRoomDto(room.Id, room.Name, room.AdminUserId, room.AdminDisplayName, archived);
         UpsertRoom(dto);
     }
 
@@ -1105,6 +1257,72 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             activeConversation = cleared;
         }
     }
+
+    private void ReplaceMessage(ChatMessageDto message)
+    {
+        int index = messages.FindIndex(m => m.Id == message.Id);
+        if (index >= 0)
+        {
+            messages[index] = message;
+        }
+    }
+
+    private void UpdateBlock(string userId, bool? blockedByMe, bool? hasBlockedMe)
+    {
+        int index = conversations.FindIndex(c => string.Equals(c.UserId, userId, StringComparison.Ordinal));
+        if (index < 0)
+        {
+            return;
+        }
+
+        var current = conversations[index];
+        var updated = current with
+        {
+            BlockedByMe = blockedByMe ?? current.BlockedByMe,
+            HasBlockedMe = hasBlockedMe ?? current.HasBlockedMe,
+        };
+        conversations[index] = updated;
+        if (string.Equals(activeConversation?.UserId, userId, StringComparison.Ordinal))
+        {
+            composerBound = false;
+            activeConversation = updated;
+        }
+    }
+
+    private bool IsOpenThread(ChatMessageDto message)
+    {
+        if (activeRoom is not null)
+        {
+            return message.ToRoomId == activeRoom.Id;
+        }
+
+        if (activeConversation is null || me is null)
+        {
+            return false;
+        }
+
+        bool fromMe = string.Equals(message.FromUserId, me.Id, StringComparison.Ordinal)
+            && string.Equals(message.ToUserId, activeConversation.UserId, StringComparison.Ordinal);
+        bool toMe = string.Equals(message.FromUserId, activeConversation.UserId, StringComparison.Ordinal)
+            && string.Equals(message.ToUserId, me.Id, StringComparison.Ordinal);
+        return fromMe || toMe;
+    }
+
+    private static string DeletedLabel(ChatMessageDto message)
+    {
+        string user = string.IsNullOrWhiteSpace(message.DeletedByDisplayName) ? "someone" : message.DeletedByDisplayName;
+        if (message.DeletedAtUtc is not DateTime deletedAt)
+        {
+            return $"Message deleted by {user}";
+        }
+
+        return $"Message deleted by {user} at {deletedAt.ToLocalTime():g}";
+    }
+
+    private string RoomSubtitle(ChatRoomDto room) =>
+        features.AllowRoomArchive && room.IsArchived
+            ? $"Archived · Started by {room.AdminDisplayName}"
+            : $"Started by {room.AdminDisplayName}";
 
     private void ReplaceConversation(ChatConversationDto conversation)
     {

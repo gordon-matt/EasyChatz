@@ -183,6 +183,8 @@
 .ec-nav-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .ec-nav-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ec-nav-meta { color: var(--ec-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ec-nav-mark { display: inline-flex; flex: none; color: var(--ec-muted); }
+.ec-nav-mark .ec-icon { width: 14px; height: 14px; }
 
 .ec-avatar {
     position: relative;
@@ -310,6 +312,8 @@
 }
 .ec-mine .ec-bubble { background: var(--ec-mine); color: var(--ec-mine-text); }
 .ec-bubble p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ec-deleted { font-style: italic; color: var(--ec-muted); }
+.ec-mine .ec-deleted { color: rgba(255, 255, 255, 0.82); }
 .ec-author { display: block; font-size: 12px; font-weight: 700; color: var(--ec-accent); margin-bottom: 2px; }
 .ec-bubble time { display: block; margin-top: 4px; font-size: 11px; color: var(--ec-muted); text-align: right; }
 .ec-mine .ec-bubble time { color: rgba(255, 255, 255, 0.78); }
@@ -384,6 +388,7 @@
 .ec-hint, .ec-empty, .ec-alert { color: var(--ec-muted); }
 .ec-empty { margin: 4px 8px 8px; font-size: 13px; }
 .ec-hint { margin: 0; padding: 10px 4px; }
+.ec-block-note { padding: 8px 14px 0; }
 .ec-alert {
     margin: 0;
     padding: 8px 14px;

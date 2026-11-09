@@ -80,7 +80,9 @@ public sealed class TestDatabase : IAsyncDisposable
 
     public IChatDeliveryQueue Delivery => scope.ServiceProvider.GetRequiredService<IChatDeliveryQueue>();
 
-    public static async Task<TestDatabase> CreateAsync()
+    public static Task<TestDatabase> CreateAsync() => CreateAsync(configure: null);
+
+    public static async Task<TestDatabase> CreateAsync(Action<EasyChatzOptions>? configure)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         string connectionString = $"Data Source=ec-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
@@ -93,7 +95,7 @@ public sealed class TestDatabase : IAsyncDisposable
         services.AddLogging();
         services.AddSingleton<IChatCurrentUser>(currentUser);
         services.AddSingleton<IChatUserDirectory, TestDirectory>();
-        services.AddEasyChatzServices().AddEasyChatzSqlite(connectionString);
+        services.AddEasyChatzServices(configure).AddEasyChatzSqlite(connectionString);
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using (var context = provider.GetRequiredService<IEasyChatzDbContextFactory>().GetContext())
