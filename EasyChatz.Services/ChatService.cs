@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Text.RegularExpressions;
 
 namespace EasyChatz.Services;
@@ -15,7 +16,8 @@ public sealed partial class ChatService(
     IChatNotificationService notifications,
     IChatUserDirectory directory,
     IChatCurrentUser currentUser,
-    IChatRealtime realtime) : IChatService
+    IChatRealtime realtime,
+    IChatTenant tenants) : IChatService
 {
     /// <summary>
     /// Gets the current user.
@@ -54,9 +56,13 @@ public sealed partial class ChatService(
             return Result<IReadOnlyList<ChatRoomDto>>.Success([]);
         }
 
+        await EnsureAnnouncementsAsync(cancellationToken);
+
+        string tenant = Tenant;
         string announcements = options.Value.AnnouncementsRoomName;
         var found = (await rooms.FindAsync(new SearchOptions<ChatRoom>
         {
+            Query = room => room.TenantId == tenant,
             OrderBy = query => query.OrderByDescending(r => r.Name == announcements).ThenBy(r => r.Name),
             CancellationToken = cancellationToken,
         })).ToList();
@@ -78,7 +84,7 @@ public sealed partial class ChatService(
             return closed;
         }
 
-        var room = await rooms.FindOneAsync(roomId);
+        var room = await FindRoomAsync(roomId, cancellationToken);
         if (room is null)
         {
             return Result<ChatRoomDto>.NotFound("Room not found.");
@@ -120,6 +126,7 @@ public sealed partial class ChatService(
 
         var saved = await rooms.InsertAsync(new ChatRoom
         {
+            TenantId = Tenant,
             Name = validated.Value,
             AdminUserId = actor.Value.Id,
             CreatedAtUtc = DateTime.UtcNow,
@@ -152,7 +159,7 @@ public sealed partial class ChatService(
             return actor.To<ChatRoomUpdatedDto>();
         }
 
-        var room = await rooms.FindOneAsync(roomId);
+        var room = await FindRoomAsync(roomId, cancellationToken);
         if (room is null)
         {
             return Result<ChatRoomUpdatedDto>.NotFound("Room not found.");
@@ -202,7 +209,7 @@ public sealed partial class ChatService(
             return actor.To<ChatRoomRemovedDto>();
         }
 
-        var room = await rooms.FindOneAsync(roomId);
+        var room = await FindRoomAsync(roomId, cancellationToken);
         if (room is null)
         {
             return Result<ChatRoomRemovedDto>.NotFound("Room not found.");
@@ -260,7 +267,7 @@ public sealed partial class ChatService(
             return closed;
         }
 
-        var room = await rooms.FindOneAsync(roomId);
+        var room = await FindRoomAsync(roomId, cancellationToken);
         if (room is null)
         {
             return Result<IReadOnlyList<ChatMessageDto>>.NotFound("Room not found.");
@@ -294,7 +301,7 @@ public sealed partial class ChatService(
             return actor.To<ChatMessageDto>();
         }
 
-        var room = await rooms.FindOneAsync(roomId);
+        var room = await FindRoomAsync(roomId, cancellationToken);
         if (room is null)
         {
             return Result<ChatMessageDto>.NotFound("Room not found.");
@@ -318,6 +325,7 @@ public sealed partial class ChatService(
 
         var saved = await messages.InsertAsync(new ChatMessage
         {
+            TenantId = Tenant,
             Content = clean.Value,
             Timestamp = DateTime.UtcNow,
             FromUserId = actor.Value.Id,
@@ -366,9 +374,10 @@ public sealed partial class ChatService(
         if (options.Value.AllowUserBlocks)
         {
             // A block with no messages yet still has to be known, so the client can hide that person.
+            string tenant = Tenant;
             var blockers = await blocks.FindAsync(new SearchOptions<ChatUserBlock>
             {
-                Query = b => b.BlockedUserId == actor.Value.Id,
+                Query = b => b.TenantId == tenant && b.BlockedUserId == actor.Value.Id,
                 CancellationToken = cancellationToken,
             });
             var known = new HashSet<string>(latest.Select(p => p.UserId), StringComparer.Ordinal);
@@ -497,6 +506,7 @@ public sealed partial class ChatService(
 
         var saved = await messages.InsertAsync(new ChatMessage
         {
+            TenantId = Tenant,
             Content = clean.Value,
             Timestamp = DateTime.UtcNow,
             FromUserId = actor.Value.Id,
@@ -548,7 +558,7 @@ public sealed partial class ChatService(
             return actor.To<ChatMessageDto>();
         }
 
-        var message = await messages.FindOneAsync(messageId);
+        var message = await FindMessageAsync(messageId, cancellationToken);
         if (message is null)
         {
             return Result<ChatMessageDto>.NotFound("Message not found.");
@@ -572,7 +582,7 @@ public sealed partial class ChatService(
         string? roomName = null;
         if (message.ToRoomId is int roomId)
         {
-            roomName = (await rooms.FindOneAsync(roomId))?.Name;
+            roomName = (await FindRoomAsync(roomId, cancellationToken))?.Name;
         }
 
         var names = await NamesAsync(
@@ -634,7 +644,7 @@ public sealed partial class ChatService(
             return actor.To<ChatRoomDto>();
         }
 
-        var room = await rooms.FindOneAsync(roomId);
+        var room = await FindRoomAsync(roomId, cancellationToken);
         if (room is null)
         {
             return Result<ChatRoomDto>.NotFound("Room not found.");
@@ -700,9 +710,10 @@ public sealed partial class ChatService(
             return Result<ChatConversationDto>.NotFound("That person could not be found.");
         }
 
+        string tenant = Tenant;
         var existing = (await blocks.FindAsync(new SearchOptions<ChatUserBlock>
         {
-            Query = b => b.BlockerUserId == actor.Value.Id && b.BlockedUserId == person.Id,
+            Query = b => b.TenantId == tenant && b.BlockerUserId == actor.Value.Id && b.BlockedUserId == person.Id,
             CancellationToken = cancellationToken,
         })).FirstOrDefault();
 
@@ -710,6 +721,7 @@ public sealed partial class ChatService(
         {
             await blocks.InsertAsync(new ChatUserBlock
             {
+                TenantId = tenant,
                 BlockerUserId = actor.Value.Id,
                 BlockedUserId = person.Id,
                 CreatedAtUtc = DateTime.UtcNow,
@@ -729,10 +741,64 @@ public sealed partial class ChatService(
         return Result<ChatConversationDto>.Success(await ConversationAsync(actor.Value.Id, person, cancellationToken));
     }
 
-    private async Task<bool> IsBlockedAsync(string blockerUserId, string blockedUserId, CancellationToken cancellationToken) =>
-        await blocks.ExistsAsync(
-            b => b.BlockerUserId == blockerUserId && b.BlockedUserId == blockedUserId,
+    private string Tenant => Constants.TenantKey(tenants.TenantId);
+
+    private async Task<ChatRoom?> FindRoomAsync(int roomId, CancellationToken cancellationToken)
+    {
+        string tenant = Tenant;
+        return await rooms.FindOneAsync(new SearchOptions<ChatRoom>
+        {
+            Query = room => room.Id == roomId && room.TenantId == tenant,
+            CancellationToken = cancellationToken,
+        });
+    }
+
+    private async Task<ChatMessage?> FindMessageAsync(int messageId, CancellationToken cancellationToken)
+    {
+        string tenant = Tenant;
+        return await messages.FindOneAsync(new SearchOptions<ChatMessage>
+        {
+            Query = message => message.Id == messageId && message.TenantId == tenant,
+            CancellationToken = cancellationToken,
+        });
+    }
+
+    /// <summary>Each tenant gets its own Announcements room the first time someone lists rooms.</summary>
+    private async Task EnsureAnnouncementsAsync(CancellationToken cancellationToken)
+    {
+        string tenant = Tenant;
+        string name = options.Value.AnnouncementsRoomName;
+        if (await rooms.ExistsAsync(
+            room => room.TenantId == tenant && room.Name == name,
+            ContextOptions.ForCancellationToken(cancellationToken)))
+        {
+            return;
+        }
+
+        try
+        {
+            await rooms.InsertAsync(new ChatRoom
+            {
+                TenantId = tenant,
+                Name = name,
+                AdminUserId = Constants.SystemUserId,
+                CreatedAtUtc = DateTime.UtcNow,
+            }, ContextOptions.ForCancellationToken(cancellationToken));
+            logger.LogInformation("Created the {Room} room for tenant {TenantId}", name, tenant);
+        }
+        catch (DbUpdateException)
+        {
+            // Another request created this tenant's room first.
+        }
+    }
+
+    private async Task<bool> IsBlockedAsync(string blockerUserId, string blockedUserId, CancellationToken cancellationToken)
+    {
+        string tenant = Tenant;
+        return await blocks.ExistsAsync(
+            b => b.TenantId == tenant && b.BlockerUserId == blockerUserId && b.BlockedUserId == blockedUserId,
             ContextOptions.ForCancellationToken(cancellationToken));
+    }
 
     private async Task<ChatConversationDto> ConversationAsync(string userId, ChatUser person, CancellationToken cancellationToken)
     {
@@ -767,10 +833,12 @@ public sealed partial class ChatService(
             return BlockSets.None;
         }
 
+        string tenant = Tenant;
         var rows = await blocks.FindAsync(new SearchOptions<ChatUserBlock>
         {
-            Query = b => (b.BlockerUserId == userId && others.Contains(b.BlockedUserId))
-                || (b.BlockedUserId == userId && others.Contains(b.BlockerUserId)),
+            Query = b => b.TenantId == tenant
+                && ((b.BlockerUserId == userId && others.Contains(b.BlockedUserId))
+                    || (b.BlockedUserId == userId && others.Contains(b.BlockerUserId))),
             CancellationToken = cancellationToken,
         });
 
@@ -821,9 +889,10 @@ public sealed partial class ChatService(
             return Result<string>.Forbidden($"'{options.Value.AnnouncementsRoomName}' is reserved.");
         }
 
+        string tenant = Tenant;
         string lowered = trimmed.ToLower();
         bool taken = await rooms.ExistsAsync(
-            r => r.Name.ToLower() == lowered && (existingId == null || r.Id != existingId),
+            r => r.TenantId == tenant && r.Name.ToLower() == lowered && (existingId == null || r.Id != existingId),
             ContextOptions.ForCancellationToken(cancellationToken));
 
         return taken
@@ -871,13 +940,22 @@ public sealed partial class ChatService(
         Math.Clamp(take ?? options.Value.DefaultPageSize, 1, Math.Max(1, options.Value.MaxPageSize));
 
     private async Task<List<ChatMessage>> PageAsync(
-        System.Linq.Expressions.Expression<Func<ChatMessage, bool>> query,
+        Expression<Func<ChatMessage, bool>> query,
         int? take,
         CancellationToken cancellationToken)
     {
+        var parameter = query.Parameters[0];
+        var scoped = Expression.Lambda<Func<ChatMessage, bool>>(
+            Expression.AndAlso(
+                Expression.Equal(
+                    Expression.Property(parameter, nameof(ChatMessage.TenantId)),
+                    Expression.Constant(Tenant)),
+                query.Body),
+            parameter);
+
         var found = await messages.FindAsync(new SearchOptions<ChatMessage>
         {
-            Query = query,
+            Query = scoped,
             OrderBy = q => q.OrderByDescending(m => m.Id),
             PageNumber = 1,
             PageSize = PageSize(take),
@@ -936,10 +1014,11 @@ public sealed partial class ChatService(
 
     private async Task<List<PartnerActivity>> PartnerActivityAsync(string userId, CancellationToken cancellationToken)
     {
+        string tenant = Tenant;
         List<PartnerRow> rows;
         using (var connection = messages.OpenConnection())
         {
-            rows = await connection.Query(m => m.ToUserId != null && (m.FromUserId == userId || m.ToUserId == userId))
+            rows = await connection.Query(m => m.TenantId == tenant && m.ToUserId != null && (m.FromUserId == userId || m.ToUserId == userId))
                 .Select(m => new PartnerRow(m.FromUserId, m.ToUserId!, m.Timestamp))
                 .ToListAsync(cancellationToken);
         }

@@ -9,7 +9,7 @@ namespace EasyChatz;
 /// Presence and direct messages. Room messages are saved by <see cref="Services.IChatService"/> and
 /// broadcast from there; this hub is what the browser joins so it receives them.
 /// </summary>
-public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOptions<EasyChatzOptions> options) : Hub
+public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IChatTenant tenants, IOptions<EasyChatzOptions> options) : Hub
 {
     private static readonly Dictionary<string, Connection> Connections = new();
     private static readonly Lock Gate = new();
@@ -42,8 +42,9 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, connection.Room);
         }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, roomName);
-        connection.Room = roomName;
+        string group = Constants.RoomGroup(connection.TenantId, roomName);
+        await Groups.AddToGroupAsync(Context.ConnectionId, group);
+        connection.Room = group;
     }
 
     /// <summary>
@@ -51,33 +52,60 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
     /// </summary>
     /// <param name="roomName">The room name.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    public Task Leave(string roomName) => Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
+    public Task Leave(string roomName)
+    {
+        if (string.IsNullOrWhiteSpace(roomName))
+        {
+            return Task.CompletedTask;
+        }
+
+        string tenant;
+        lock (Gate)
+        {
+            tenant = Connections.TryGetValue(Context.ConnectionId, out var connection)
+                ? connection.TenantId
+                : CurrentTenant();
+        }
+
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, Constants.RoomGroup(tenant, roomName));
+    }
 
     /// <summary>Sends the caller the online people they are allowed to see. Used after a connection is accepted.</summary>
     public async Task SyncPresence()
     {
-        string? userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        string? userId = CurrentUserId();
         if (string.IsNullOrEmpty(userId) || IsWatching())
         {
             return;
         }
 
+        string tenant = CurrentTenant();
         List<ChatPresenceDto> existing;
         lock (Gate)
         {
-            existing = Connections.Values.Select(c => c.User).Where(person => person.ConnectionId != Context.ConnectionId).ToList();
+            existing = SameTenant(tenant)
+                .Where(person => person.ConnectionId != Context.ConnectionId)
+                .ToList();
         }
 
-        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, await VisibleAsync(userId, existing));
+        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, await VisibleAsync(userId, tenant, existing));
     }
 
     /// <summary>Puts the connection back in its user group after a reconnect.</summary>
-    public Task Rejoin()
+    public async Task Rejoin()
     {
-        string? userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-        return string.IsNullOrEmpty(userId)
-            ? Task.CompletedTask
-            : Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
+        string? userId = CurrentUserId();
+        if (string.IsNullOrEmpty(userId))
+        {
+            return;
+        }
+
+        string tenant = CurrentTenant();
+        await Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(tenant, userId));
+        if (!IsWatching() && tenant.Length > 0)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, Constants.TenantGroup(tenant));
+        }
     }
 
     /// <summary>
@@ -101,18 +129,24 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
     /// <inheritdoc/>
     public override async Task OnConnectedAsync()
     {
-        string? userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        string? userId = CurrentUserId();
         if (string.IsNullOrEmpty(userId))
         {
             await base.OnConnectedAsync();
             return;
         }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(userId));
+        string tenant = CurrentTenant();
+        await Groups.AddToGroupAsync(Context.ConnectionId, Constants.UserGroup(tenant, userId));
         if (IsWatching())
         {
             await base.OnConnectedAsync();
             return;
+        }
+
+        if (tenant.Length > 0)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, Constants.TenantGroup(tenant));
         }
 
         var person = await directory.FindAsync(userId);
@@ -125,12 +159,12 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
         List<ChatPresenceDto> existing;
         lock (Gate)
         {
-            existing = Connections.Values.Select(c => c.User).ToList();
-            Connections[Context.ConnectionId] = new Connection(presence);
+            existing = SameTenant(tenant);
+            Connections[Context.ConnectionId] = new Connection(presence, tenant);
         }
 
-        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, await VisibleAsync(userId, existing));
-        await PublishPresenceAsync(userId, Constants.HubEvents.AddUser, presence);
+        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, await VisibleAsync(userId, tenant, existing));
+        await PublishPresenceAsync(userId, tenant, Constants.HubEvents.AddUser, presence);
         await base.OnConnectedAsync();
     }
 
@@ -146,31 +180,50 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
 
         if (connection is not null)
         {
-            await PublishPresenceAsync(connection.User.UserId, Constants.HubEvents.RemoveUser, connection.User);
+            await PublishPresenceAsync(connection.User.UserId, connection.TenantId, Constants.HubEvents.RemoveUser, connection.User);
         }
 
         await base.OnDisconnectedAsync(exception);
     }
 
-    private async Task<List<ChatPresenceDto>> VisibleAsync(string userId, IReadOnlyList<ChatPresenceDto> people)
+    private string? CurrentUserId() =>
+        Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+
+    private string CurrentTenant() => Constants.TenantKey(tenants.TenantId);
+
+    /// <summary>Caller holds <see cref="Gate"/>.</summary>
+    private static List<ChatPresenceDto> SameTenant(string tenant) =>
+        Connections.Values
+            .Where(connection => connection.TenantId == tenant)
+            .Select(connection => connection.User)
+            .ToList();
+
+    private async Task<List<ChatPresenceDto>> VisibleAsync(string userId, string tenant, IReadOnlyList<ChatPresenceDto> people)
     {
+        var others = people.Where(person => person.ConnectionId != Context.ConnectionId).ToList();
         if (!options.Value.RequireConnections)
         {
-            return people.ToList();
+            return others;
         }
 
         var allowed = await chat.GetConnectedUserIdsAsync();
         var ids = allowed.IsSuccess && allowed.Value is not null
             ? allowed.Value.ToHashSet(StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
-        return people.Where(person => ids.Contains(person.UserId) && !string.Equals(person.UserId, userId, StringComparison.Ordinal)).ToList();
+        return others.Where(person => ids.Contains(person.UserId) && !string.Equals(person.UserId, userId, StringComparison.Ordinal)).ToList();
     }
 
-    private async Task PublishPresenceAsync(string userId, string eventName, ChatPresenceDto presence)
+    private async Task PublishPresenceAsync(string userId, string tenant, string eventName, ChatPresenceDto presence)
     {
         if (!options.Value.RequireConnections)
         {
-            await Clients.Others.SendAsync(eventName, presence);
+            if (tenant.Length == 0)
+            {
+                await Clients.Others.SendAsync(eventName, presence);
+                return;
+            }
+
+            await Clients.GroupExcept(Constants.TenantGroup(tenant), Context.ConnectionId).SendAsync(eventName, presence);
             return;
         }
 
@@ -182,7 +235,7 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
 
         foreach (string otherId in allowed.Value.Where(id => !string.Equals(id, userId, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal))
         {
-            await Clients.Group(Constants.UserGroup(otherId)).SendAsync(eventName, presence);
+            await Clients.Group(Constants.UserGroup(tenant, otherId)).SendAsync(eventName, presence);
         }
     }
 
@@ -192,9 +245,11 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOp
         return http?.Request.Query.TryGetValue(Constants.WatchQueryName, out var value) == true && value == "1";
     }
 
-    private sealed class Connection(ChatPresenceDto user)
+    private sealed class Connection(ChatPresenceDto user, string tenantId)
     {
         public ChatPresenceDto User { get; } = user;
+
+        public string TenantId { get; } = tenantId;
 
         public string? Room { get; set; }
     }

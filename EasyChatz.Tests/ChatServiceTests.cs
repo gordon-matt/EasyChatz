@@ -391,4 +391,63 @@ public sealed class ChatServiceTests
         Assert.True(found.IsSuccess);
         Assert.Equal("blair", found.Value!.Single().UserId);
     }
+
+    [Fact]
+    public void A_single_tenant_keeps_the_original_signalr_groups()
+    {
+        Assert.Equal("user:alex", EasyChatz.Constants.UserGroup(null, "alex"));
+        Assert.Equal("General", EasyChatz.Constants.RoomGroup(null, "General"));
+        Assert.Equal("tenant:4:user:alex", EasyChatz.Constants.UserGroup(" 4 ", "alex"));
+        Assert.Equal("tenant:4:room:General", EasyChatz.Constants.RoomGroup("4", "General"));
+    }
+
+    [Fact]
+    public async Task Tenants_do_not_share_messages_connections_or_rooms()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync(options => options.RequireConnections = true);
+
+        database.Tenant.TenantId = "1";
+        Assert.True((await database.Chat.RequestConnectionAsync("blair", "from one", cancellationToken)).IsSuccess);
+        var generalOne = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
+        Assert.Equal("General", generalOne.Name);
+
+        database.Tenant.TenantId = "2";
+        Assert.Empty((await database.Chat.GetConversationsAsync(cancellationToken)).Value!);
+        var generalTwo = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
+        Assert.NotEqual(generalOne.Id, generalTwo.Id);
+        Assert.True((await database.Chat.RequestConnectionAsync("blair", "from two", cancellationToken)).IsSuccess);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        Assert.True((await database.Chat.AcceptConnectionAsync("alex", cancellationToken)).IsSuccess);
+        var accepted = await database.Chat.GetPrivateMessagesAsync("alex", cancellationToken: cancellationToken);
+        Assert.Equal("from two", accepted.Value!.Single().Content);
+
+        database.Tenant.TenantId = "1";
+        var stillWaiting = await database.Chat.GetConversationsAsync(cancellationToken);
+        Assert.Equal(ChatConnectionStatus.PendingIncoming, stillWaiting.Value!.Single().Connection);
+        Assert.Empty((await database.Chat.GetPrivateMessagesAsync("alex", cancellationToken: cancellationToken)).Value!);
+        Assert.Empty((await database.Notifications.GetUnreadAsync(cancellationToken)).Value!);
+        var missingRoom = await database.Chat.GetRoomMessagesAsync(generalTwo.Id, cancellationToken: cancellationToken);
+        Assert.Equal(ResultStatus.NotFound, missingRoom.Status);
+
+        database.CurrentUser.User = TestDirectory.Alex;
+        Assert.True((await database.Chat.BlockUserAsync("blair", cancellationToken)).IsSuccess);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var blocked = await database.Chat.SendPrivateMessageAsync("alex", "tenant one", cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, blocked.Status);
+
+        database.Tenant.TenantId = "2";
+        var sent = await database.Chat.SendPrivateMessageAsync("alex", "still open", cancellationToken);
+        Assert.True(sent.IsSuccess);
+
+        var links = await database.ConnectionsAsync(cancellationToken);
+        Assert.Contains(links, row => row.TenantId == "1" && row.Status == ChatConnectionState.Pending);
+        Assert.Contains(links, row => row.TenantId == "2" && row.Status == ChatConnectionState.Accepted);
+
+        var waiting = await database.Delivery.ListPendingAsync(DateTime.UtcNow.AddMinutes(1), cancellationToken);
+        Assert.Contains(waiting, notice => notice.TenantId == "2" && notice.Content == "still open");
+        Assert.DoesNotContain(waiting, notice => notice.TenantId == "1" && notice.Content == "still open");
+    }
 }

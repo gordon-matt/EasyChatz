@@ -22,7 +22,7 @@ public static class AspNetCoreServiceCollectionExtensions
             services.AddHttpContextAccessor();
 
             services.Replace(ServiceDescriptor.Scoped<IChatCurrentUser, ChatCurrentUser>());
-            services.Replace(ServiceDescriptor.Singleton<IChatRealtime, SignalRChatRealtime>());
+            services.Replace(ServiceDescriptor.Scoped<IChatRealtime, SignalRChatRealtime>());
 
             services.TryAddSingleton(provider =>
             {

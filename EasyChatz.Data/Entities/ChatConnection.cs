@@ -7,6 +7,9 @@ namespace EasyChatz.Data.Entities;
 /// </summary>
 public class ChatConnection : BaseEntity<int>
 {
+    /// <summary>Host tenant key. Empty for a single-tenant host.</summary>
+    public string TenantId { get; set; } = string.Empty;
+
     /// <summary>The person who asked.</summary>
     public string RequesterUserId { get; set; } = string.Empty;
 
@@ -34,6 +37,7 @@ public class ChatConnectionMap : IEntityTypeConfiguration<ChatConnection>
     {
         builder.ToTable(Constants.Tables.Connections, Constants.Schema);
         builder.HasKey(row => row.Id);
+        builder.Property(row => row.TenantId).IsRequired().HasMaxLength(Constants.MaxLengths.TenantId).IsUnicode(false).HasDefaultValue(string.Empty);
         builder.Property(row => row.RequesterUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(row => row.RecipientUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(row => row.Status).HasConversion<int>();
@@ -41,7 +45,7 @@ public class ChatConnectionMap : IEntityTypeConfiguration<ChatConnection>
         builder.Property(row => row.CreatedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
         builder.Property(row => row.RespondedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
 
-        builder.HasIndex(row => new { row.RequesterUserId, row.RecipientUserId }).IsUnique();
-        builder.HasIndex(row => row.RecipientUserId);
+        builder.HasIndex(row => new { row.TenantId, row.RequesterUserId, row.RecipientUserId }).IsUnique();
+        builder.HasIndex(row => new { row.TenantId, row.RecipientUserId });
     }
 }

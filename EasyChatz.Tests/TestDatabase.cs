@@ -58,21 +58,29 @@ public sealed class TestDirectory : IChatUserDirectory
     }
 }
 
+public sealed class TestTenant : IChatTenant
+{
+    public string? TenantId { get; set; }
+}
+
 public sealed class TestDatabase : IAsyncDisposable
 {
     private readonly SqliteConnection keepAlive;
     private readonly ServiceProvider provider;
     private readonly AsyncServiceScope scope;
 
-    private TestDatabase(SqliteConnection keepAlive, ServiceProvider provider, TestCurrentUser currentUser)
+    private TestDatabase(SqliteConnection keepAlive, ServiceProvider provider, TestCurrentUser currentUser, TestTenant tenant)
     {
         this.keepAlive = keepAlive;
         this.provider = provider;
         scope = provider.CreateAsyncScope();
         CurrentUser = currentUser;
+        Tenant = tenant;
     }
 
     public TestCurrentUser CurrentUser { get; }
+
+    public TestTenant Tenant { get; }
 
     public IChatService Chat => scope.ServiceProvider.GetRequiredService<IChatService>();
 
@@ -96,11 +104,13 @@ public sealed class TestDatabase : IAsyncDisposable
         await keepAlive.OpenAsync(cancellationToken);
 
         var currentUser = new TestCurrentUser { User = TestDirectory.Alex };
+        var tenant = new TestTenant();
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddLogging();
         services.AddSingleton<IChatCurrentUser>(currentUser);
         services.AddSingleton<IChatUserDirectory, TestDirectory>();
+        services.AddSingleton<IChatTenant>(tenant);
         services.AddEasyChatzServices(options =>
         {
             // The product asks before a first message. These tests cover open messaging unless a test opts in.
@@ -117,12 +127,13 @@ public sealed class TestDatabase : IAsyncDisposable
         var rooms = provider.GetRequiredService<IRepository<ChatRoom>>();
         await rooms.InsertAsync(new ChatRoom
         {
+            TenantId = string.Empty,
             Name = EasyChatz.Constants.AnnouncementsRoomName,
             AdminUserId = EasyChatz.Constants.SystemUserId,
             CreatedAtUtc = DateTime.UtcNow,
         });
 
-        return new TestDatabase(keepAlive, provider, currentUser);
+        return new TestDatabase(keepAlive, provider, currentUser, tenant);
     }
 
     public async ValueTask DisposeAsync()

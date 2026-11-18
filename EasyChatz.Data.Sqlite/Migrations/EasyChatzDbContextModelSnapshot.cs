@@ -50,11 +50,19 @@ namespace EasyChatz.Data.Sqlite.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("RecipientUserId");
+                    b.HasIndex("TenantId", "RecipientUserId");
 
-                    b.HasIndex("RequesterUserId", "RecipientUserId")
+                    b.HasIndex("TenantId", "RequesterUserId", "RecipientUserId")
                         .IsUnique();
 
                     b.ToTable("EasyChatz_Connections", (string)null);
@@ -89,6 +97,14 @@ namespace EasyChatz.Data.Sqlite.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("TEXT");
 
@@ -102,11 +118,13 @@ namespace EasyChatz.Data.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ToRoomId", "Id");
+                    b.HasIndex("ToRoomId");
 
-                    b.HasIndex("FromUserId", "ToUserId", "Id");
+                    b.HasIndex("TenantId", "ToRoomId", "Id");
 
-                    b.HasIndex("ToUserId", "FromUserId", "Id");
+                    b.HasIndex("TenantId", "FromUserId", "ToUserId", "Id");
+
+                    b.HasIndex("TenantId", "ToUserId", "FromUserId", "Id");
 
                     b.ToTable("EasyChatz_Messages", (string)null);
                 });
@@ -143,9 +161,17 @@ namespace EasyChatz.Data.Sqlite.Migrations
                         .IsUnicode(true)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("TenantId", "Name")
                         .IsUnique();
 
                     b.ToTable("EasyChatz_Rooms", (string)null);
@@ -172,11 +198,19 @@ namespace EasyChatz.Data.Sqlite.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("BlockedUserId");
+                    b.HasIndex("TenantId", "BlockedUserId");
 
-                    b.HasIndex("BlockerUserId", "BlockedUserId")
+                    b.HasIndex("TenantId", "BlockerUserId", "BlockedUserId")
                         .IsUnique();
 
                     b.ToTable("EasyChatz_UserBlocks", (string)null);
@@ -206,6 +240,14 @@ namespace EasyChatz.Data.Sqlite.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ToUserId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -218,7 +260,7 @@ namespace EasyChatz.Data.Sqlite.Migrations
 
                     b.HasIndex("IsRead", "DeliveredAtUtc");
 
-                    b.HasIndex("ToUserId", "FromUserId", "IsRead");
+                    b.HasIndex("TenantId", "ToUserId", "FromUserId", "IsRead");
 
                     b.ToTable("EasyChatz_Notifications", (string)null);
                 });

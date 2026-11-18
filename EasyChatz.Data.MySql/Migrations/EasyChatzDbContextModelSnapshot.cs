@@ -52,11 +52,19 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("RecipientUserId");
+                    b.HasIndex("TenantId", "RecipientUserId");
 
-                    b.HasIndex("RequesterUserId", "RecipientUserId")
+                    b.HasIndex("TenantId", "RequesterUserId", "RecipientUserId")
                         .IsUnique();
 
                     b.ToTable("EasyChatz_Connections", (string)null);
@@ -91,6 +99,14 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("datetime(6)");
 
@@ -104,11 +120,13 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ToRoomId", "Id");
+                    b.HasIndex("ToRoomId");
 
-                    b.HasIndex("FromUserId", "ToUserId", "Id");
+                    b.HasIndex("TenantId", "ToRoomId", "Id");
 
-                    b.HasIndex("ToUserId", "FromUserId", "Id");
+                    b.HasIndex("TenantId", "FromUserId", "ToUserId", "Id");
+
+                    b.HasIndex("TenantId", "ToUserId", "FromUserId", "Id");
 
                     b.ToTable("EasyChatz_Messages", (string)null);
                 });
@@ -145,9 +163,17 @@ namespace EasyChatz.Data.MySql.Migrations
                         .IsUnicode(true)
                         .HasColumnType("varchar(100)");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("TenantId", "Name")
                         .IsUnique();
 
                     b.ToTable("EasyChatz_Rooms", (string)null);
@@ -174,11 +200,19 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .HasDefaultValue("");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("BlockedUserId");
+                    b.HasIndex("TenantId", "BlockedUserId");
 
-                    b.HasIndex("BlockerUserId", "BlockedUserId")
+                    b.HasIndex("TenantId", "BlockerUserId", "BlockedUserId")
                         .IsUnique();
 
                     b.ToTable("EasyChatz_UserBlocks", (string)null);
@@ -208,6 +242,14 @@ namespace EasyChatz.Data.MySql.Migrations
                     b.Property<bool>("IsRead")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("ToUserId")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -220,7 +262,7 @@ namespace EasyChatz.Data.MySql.Migrations
 
                     b.HasIndex("IsRead", "DeliveredAtUtc");
 
-                    b.HasIndex("ToUserId", "FromUserId", "IsRead");
+                    b.HasIndex("TenantId", "ToUserId", "FromUserId", "IsRead");
 
                     b.ToTable("EasyChatz_Notifications", (string)null);
                 });

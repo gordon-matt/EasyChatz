@@ -4,12 +4,14 @@ using Microsoft.AspNetCore.SignalR;
 namespace EasyChatz;
 
 /// <summary>Fans chat changes out through <see cref="ChatHub"/>.</summary>
-internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealtime
+internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub, IChatTenant tenants) : IChatRealtime
 {
+    private string Tenant => Constants.TenantKey(tenants.TenantId);
+
     public Task PublishRoomMessageAsync(ChatMessageDto message, CancellationToken cancellationToken = default) =>
         string.IsNullOrEmpty(message.ToRoomName)
             ? Task.CompletedTask
-            : hub.Clients.Group(message.ToRoomName).SendAsync(Constants.HubEvents.NewMessage, message, cancellationToken);
+            : hub.Clients.Group(Constants.RoomGroup(Tenant, message.ToRoomName)).SendAsync(Constants.HubEvents.NewMessage, message, cancellationToken);
 
     public async Task PublishPrivateMessageAsync(ChatMessageDto message, CancellationToken cancellationToken = default)
     {
@@ -25,7 +27,7 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
     {
         if (message.RoomId is not null && !string.IsNullOrEmpty(message.RoomName))
         {
-            await hub.Clients.Group(message.RoomName).SendAsync(Constants.HubEvents.RemoveMessage, message, cancellationToken);
+            await hub.Clients.Group(Constants.RoomGroup(Tenant, message.RoomName)).SendAsync(Constants.HubEvents.RemoveMessage, message, cancellationToken);
             return;
         }
 
@@ -43,17 +45,21 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
             return;
         }
 
-        // Group covers the connection we tracked. User() covers a reconnect that dropped the group.
-        // The browser ignores the second copy of the same message.
-        await hub.Clients.Group(Constants.UserGroup(userId)).SendAsync(eventName, payload, cancellationToken);
-        await hub.Clients.User(userId).SendAsync(eventName, payload, cancellationToken);
+        // Group covers the connection we tracked. User() covers a reconnect that dropped the group
+        // on a single-tenant host. A tenant key is not part of the SignalR user id, so that fallback
+        // would cross tenants when two sites reuse the same user id.
+        await hub.Clients.Group(Constants.UserGroup(Tenant, userId)).SendAsync(eventName, payload, cancellationToken);
+        if (Tenant.Length == 0)
+        {
+            await hub.Clients.User(userId).SendAsync(eventName, payload, cancellationToken);
+        }
     }
 
     public Task PublishRoomAddedAsync(ChatRoomDto room, CancellationToken cancellationToken = default) =>
-        hub.Clients.All.SendAsync(Constants.HubEvents.AddRoom, room, cancellationToken);
+        Everyone().SendAsync(Constants.HubEvents.AddRoom, room, cancellationToken);
 
     public Task PublishRoomUpdatedAsync(ChatRoomUpdatedDto room, CancellationToken cancellationToken = default) =>
-        hub.Clients.All.SendAsync(Constants.HubEvents.UpdateRoom, room, cancellationToken);
+        Everyone().SendAsync(Constants.HubEvents.UpdateRoom, room, cancellationToken);
 
     public Task PublishUnreadChangedAsync(string userId, CancellationToken cancellationToken = default) =>
         UserAsync(userId, Constants.HubEvents.UnreadChanged, new { userId }, cancellationToken);
@@ -68,15 +74,15 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
 
     public async Task PublishRoomRemovedAsync(ChatRoomRemovedDto room, CancellationToken cancellationToken = default)
     {
-        await hub.Clients.Group(room.RoomName).SendAsync(Constants.HubEvents.RoomDeleted, room, cancellationToken);
-        await hub.Clients.All.SendAsync(Constants.HubEvents.RemoveRoom, room, cancellationToken);
+        await hub.Clients.Group(Constants.RoomGroup(Tenant, room.RoomName)).SendAsync(Constants.HubEvents.RoomDeleted, room, cancellationToken);
+        await Everyone().SendAsync(Constants.HubEvents.RemoveRoom, room, cancellationToken);
     }
 
     public async Task PublishMessageDeletedAsync(ChatMessageDto message, CancellationToken cancellationToken = default)
     {
         if (message.ToRoomId is not null && !string.IsNullOrEmpty(message.ToRoomName))
         {
-            await hub.Clients.Group(message.ToRoomName).SendAsync(Constants.HubEvents.MessageDeleted, message, cancellationToken);
+            await hub.Clients.Group(Constants.RoomGroup(Tenant, message.ToRoomName)).SendAsync(Constants.HubEvents.MessageDeleted, message, cancellationToken);
             return;
         }
 
@@ -88,7 +94,7 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
     }
 
     public Task PublishRoomArchivedAsync(ChatRoomDto room, CancellationToken cancellationToken = default) =>
-        hub.Clients.All.SendAsync(Constants.HubEvents.ArchiveRoom, room, cancellationToken);
+        Everyone().SendAsync(Constants.HubEvents.ArchiveRoom, room, cancellationToken);
 
     public async Task PublishConnectionChangedAsync(ChatConnectionChangedDto change, CancellationToken cancellationToken = default)
     {
@@ -107,4 +113,7 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
             await UserAsync(change.BlockedUserId, Constants.HubEvents.UserBlockChanged, change, cancellationToken);
         }
     }
+
+    private IClientProxy Everyone() =>
+        Tenant.Length == 0 ? hub.Clients.All : hub.Clients.Group(Constants.TenantGroup(Tenant));
 }

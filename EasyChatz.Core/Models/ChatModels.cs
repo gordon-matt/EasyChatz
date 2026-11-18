@@ -172,15 +172,23 @@ public sealed record ChatBlockChangedDto(string BlockerUserId, string BlockedUse
 
 /// <summary>
 /// An unread direct message that no host channel (email, push, anything else) has taken yet.
-/// A background job reads these. They are not exposed to the browser.
+/// A background job reads these across every tenant. They are not exposed to the browser.
 /// </summary>
+/// <param name="Id">The notice identifier.</param>
+/// <param name="MessageId">The message identifier.</param>
+/// <param name="FromUserId">The from user identifier.</param>
+/// <param name="ToUserId">The to user identifier.</param>
+/// <param name="Content">The content.</param>
+/// <param name="CreatedAtUtc">When the notice was created, in UTC.</param>
+/// <param name="TenantId">The tenant the message was stored in. Empty for a single-tenant host.</param>
 public sealed record ChatPendingNotice(
     int Id,
     int MessageId,
     string FromUserId,
     string ToUserId,
     string Content,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string TenantId = "");
 
 /// <summary>A person offered in the mention suggestions while typing <c>@</c> in a room.</summary>
 public sealed record ChatMentionDto(string UserId, string DisplayName);

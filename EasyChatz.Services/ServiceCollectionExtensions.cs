@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
             services.AddEasyChatzRepository<ChatConnection>();
 
             services.TryAddSingleton<IChatRealtime, NullChatRealtime>();
+            services.TryAddScoped<IChatTenant, DefaultChatTenant>();
             services.TryAddScoped<IChatUserDirectory, FallbackChatUserDirectory>();
             services.TryAddScoped<IChatCurrentUser, UnauthenticatedChatUser>();
             services.TryAddScoped<IChatService, ChatService>();

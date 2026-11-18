@@ -15,7 +15,7 @@ Features in this version:
 - Cursor paging of messages, HTML stripped from anything that is sent
 - Light, dark, auto, and Bootstrap-friendly themes, and a layout that adapts to its container's width
 
-EasyChatz does not authenticate anyone. The host already has accounts. Register `IChatUserDirectory` so display names, the administrator flag, and room-creation permission come from those accounts.
+EasyChatz does not authenticate anyone. The host already has accounts. Register `IChatUserDirectory` so display names, the administrator flag, and room-creation permission come from those accounts. Register `IChatTenant` only when the host is multi-tenant. A single-tenant site, such as Kinnect, leaves it unset and every conversation stays in one partition.
 
 ## Projects
 
@@ -252,6 +252,24 @@ EasyChatz keeps its own rooms, messages, and notifications in the `chatz` schema
 
 Register the directory before `AddEasyChatz()`.
 
+### Tenancy
+
+Tenancy is optional and is not an `EasyChatz` setting. The default stores every row with an empty tenant id, which is the whole chat for a single-tenant host.
+
+A multi-tenant site registers `IChatTenant` before `AddEasyChatz()`. Return null for the single-tenant partition. Return the key the host's own tenancy library already resolved, for example a Flatmate tenant id, a Finbuckle identifier, or a workspace slug. EasyChatz does not reference those libraries. The key is an opaque string of at most 64 characters.
+
+```csharp
+builder.Services.AddScoped<IChatTenant, SiteChatTenant>();
+builder.Services.AddScoped<IChatUserDirectory, MyChatUserDirectory>();
+builder.Services.AddEasyChatz();
+```
+
+Rooms, messages, connection requests, blocks, unread notices, and who is online are then limited to that key. The same two user ids can have a separate conversation in each tenant. The directory should return only people in the current tenant.
+
+The resolver runs on each service call and again when the browser connects to the hub, so it has to see the tenant in both places. A background job that calls `IChatDeliveryQueue` still sees every tenant. `ChatPendingNotice.TenantId` says which one a notice belongs to.
+
+An existing database gains a `TenantId` column that defaults to empty, so history written before tenancy was turned on stays in the single-tenant partition.
+
 ### Open a direct message
 
 `WithUserId` opens that conversation when the component loads, and again whenever the value changes. Use it for a link such as "Message this person":
@@ -314,7 +332,7 @@ public sealed class UnreadMessageJob(IChatDeliveryQueue queue, IEmailSender emai
 }
 ```
 
-`ListPendingAsync` returns notices that are still unread, have no `DeliveredAtUtc`, and were created at or before the time you pass. Each `ChatPendingNotice` has `Id`, `MessageId`, `FromUserId`, `ToUserId`, `Content`, and `CreatedAtUtc`. `MarkDeliveredAsync` sets `DeliveredAtUtc`. It does not mark the conversation read, so the badge still shows until the recipient opens it.
+`ListPendingAsync` returns notices that are still unread, have no `DeliveredAtUtc`, and were created at or before the time you pass. It is not limited to the current tenant. Each `ChatPendingNotice` has `Id`, `MessageId`, `FromUserId`, `ToUserId`, `Content`, `CreatedAtUtc`, and `TenantId` (empty when the host is single-tenant). `MarkDeliveredAsync` sets `DeliveredAtUtc`. It does not mark the conversation read, so the badge still shows until the recipient opens it.
 
 Pass a time in the past when the host wants to wait before sending. Pass a time in the future to take everything that is waiting.
 
@@ -324,7 +342,7 @@ Pass a time in the past when the host wants to wait before sending. Pass a time 
 
 ## Behaviour
 
-- Room messages are saved by the service, then broadcast to a SignalR group named after the room.
+- Room messages are saved by the service, then broadcast to a SignalR group named after the room. When a tenant is set, that group is prefixed with the tenant, so two sites can both have a room called General.
 - Direct messages are sent only through the hub (`SendPrivate`). The HTTP API does not accept them. Each one creates an unread notification for the recipient.
 - Messages are paged with `take` (1–200, default 50) and `beforeId`. Pages come back oldest first.
 - Markup is stripped. A message longer than `MaxMessageLength` (default 2000), or a room name longer than 100, is rejected. The composer can be capped lower with the `MaxLength` parameter.

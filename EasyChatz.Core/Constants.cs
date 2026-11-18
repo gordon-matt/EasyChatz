@@ -38,12 +38,45 @@ public static class Constants
     /// <summary>Owner of the seeded Announcements room. Not a real account.</summary>
     public const string SystemUserId = "system";
 
-    /// <summary>
-    /// Gets the user group.
-    /// </summary>
+    /// <summary>Empty when <paramref name="tenantId"/> is missing. That is the single-tenant partition.</summary>
+    /// <param name="tenantId">The tenant key from the host, or null.</param>
+    /// <returns>The stored tenant id.</returns>
+    public static string TenantKey(string? tenantId) =>
+        string.IsNullOrWhiteSpace(tenantId) ? string.Empty : tenantId.Trim();
+
+    /// <summary>The SignalR group for one person on a single-tenant host.</summary>
     /// <param name="userId">The user identifier.</param>
     /// <returns>The user group.</returns>
-    public static string UserGroup(string userId) => "user:" + userId;
+    public static string UserGroup(string userId) => UserGroup(tenantId: null, userId);
+
+    /// <summary>
+    /// The SignalR group for one person. A tenant key keeps the same user id in another tenant out of this group.
+    /// </summary>
+    /// <param name="tenantId">The tenant key, or null for a single-tenant host.</param>
+    /// <param name="userId">The user identifier.</param>
+    /// <returns>The user group.</returns>
+    public static string UserGroup(string? tenantId, string userId)
+    {
+        string tenant = TenantKey(tenantId);
+        return tenant.Length == 0 ? "user:" + userId : "tenant:" + tenant + ":user:" + userId;
+    }
+
+    /// <summary>
+    /// The SignalR group for a room. A single-tenant host keeps the room name, which is what existing clients join.
+    /// </summary>
+    /// <param name="tenantId">The tenant key, or null for a single-tenant host.</param>
+    /// <param name="roomName">The room name.</param>
+    /// <returns>The room group.</returns>
+    public static string RoomGroup(string? tenantId, string roomName)
+    {
+        string tenant = TenantKey(tenantId);
+        return tenant.Length == 0 ? roomName : "tenant:" + tenant + ":room:" + roomName;
+    }
+
+    /// <summary>The SignalR group every live connection in one tenant joins, apart from unread-only watchers.</summary>
+    /// <param name="tenantId">The tenant key.</param>
+    /// <returns>The tenant group.</returns>
+    public static string TenantGroup(string? tenantId) => "tenant:" + TenantKey(tenantId);
 
     /// <summary>
     /// The request header name constant.
@@ -99,6 +132,9 @@ public static class Constants
         /// varchar(450) pair exceeds the 3072 byte key limit.
         /// </summary>
         public const int UserId = 128;
+
+        /// <summary>Opaque tenant key. Long enough for an integer id or a short slug.</summary>
+        public const int TenantId = 64;
     }
 
     /// <summary>

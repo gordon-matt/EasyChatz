@@ -8,6 +8,9 @@ namespace EasyChatz.Data.Entities;
 [DebuggerDisplay("{FromUserId}: {Content}")]
 public class ChatMessage : BaseEntity<int>
 {
+    /// <summary>Host tenant key. Empty for a single-tenant host.</summary>
+    public string TenantId { get; set; } = string.Empty;
+
     /// <summary>
     /// Gets or sets the content.
     /// </summary>
@@ -66,6 +69,7 @@ public class ChatMessageMap : IEntityTypeConfiguration<ChatMessage>
     {
         builder.ToTable(Constants.Tables.Messages, Constants.Schema);
         builder.HasKey(m => m.Id);
+        builder.Property(m => m.TenantId).IsRequired().HasMaxLength(Constants.MaxLengths.TenantId).IsUnicode(false).HasDefaultValue(string.Empty);
         builder.Property(m => m.Content).IsRequired().HasMaxLength(Constants.MaxLengths.Message).IsUnicode(true);
         builder.Property(m => m.FromUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.ToUserId).HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
@@ -78,8 +82,8 @@ public class ChatMessageMap : IEntityTypeConfiguration<ChatMessage>
             .HasForeignKey(m => m.ToRoomId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(m => new { m.ToRoomId, m.Id });
-        builder.HasIndex(m => new { m.FromUserId, m.ToUserId, m.Id });
-        builder.HasIndex(m => new { m.ToUserId, m.FromUserId, m.Id });
+        builder.HasIndex(m => new { m.TenantId, m.ToRoomId, m.Id });
+        builder.HasIndex(m => new { m.TenantId, m.FromUserId, m.ToUserId, m.Id });
+        builder.HasIndex(m => new { m.TenantId, m.ToUserId, m.FromUserId, m.Id });
     }
 }

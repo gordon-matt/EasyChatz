@@ -6,6 +6,9 @@ namespace EasyChatz.Data.Entities;
 /// </summary>
 public class ChatUserBlock : BaseEntity<int>
 {
+    /// <summary>Host tenant key. Empty for a single-tenant host.</summary>
+    public string TenantId { get; set; } = string.Empty;
+
     /// <summary>The person who created the block.</summary>
     public string BlockerUserId { get; set; } = string.Empty;
 
@@ -31,12 +34,13 @@ public class ChatUserBlockMap : IEntityTypeConfiguration<ChatUserBlock>
     {
         builder.ToTable(Constants.Tables.UserBlocks, Constants.Schema);
         builder.HasKey(m => m.Id);
+        builder.Property(m => m.TenantId).IsRequired().HasMaxLength(Constants.MaxLengths.TenantId).IsUnicode(false).HasDefaultValue(string.Empty);
         builder.Property(m => m.BlockerUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.BlockedUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.CreatedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
 
         // One row per pair. The second index serves "who has blocked me".
-        builder.HasIndex(m => new { m.BlockerUserId, m.BlockedUserId }).IsUnique();
-        builder.HasIndex(m => m.BlockedUserId);
+        builder.HasIndex(m => new { m.TenantId, m.BlockerUserId, m.BlockedUserId }).IsUnique();
+        builder.HasIndex(m => new { m.TenantId, m.BlockedUserId });
     }
 }

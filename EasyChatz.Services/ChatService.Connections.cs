@@ -77,6 +77,7 @@ public sealed partial class ChatService
         {
             saved = await connections.InsertAsync(new ChatConnection
             {
+                TenantId = Tenant,
                 RequesterUserId = actor.Value.Id,
                 RecipientUserId = other.Value.Id,
                 Status = ChatConnectionState.Pending,
@@ -140,9 +141,10 @@ public sealed partial class ChatService
         }
 
         string userId = actor.Value.Id;
+        string tenant = Tenant;
         var pending = await connections.FindAsync(new SearchOptions<ChatConnection>
         {
-            Query = row => row.RecipientUserId == userId && row.Status == ChatConnectionState.Pending,
+            Query = row => row.TenantId == tenant && row.RecipientUserId == userId && row.Status == ChatConnectionState.Pending,
             CancellationToken = cancellationToken,
         });
         return Result<int>.Success(pending.Count);
@@ -150,9 +152,10 @@ public sealed partial class ChatService
 
     private async Task<Result<IReadOnlyList<ChatConversationDto>>> ConnectedConversationsAsync(string userId, CancellationToken cancellationToken)
     {
+        string tenant = Tenant;
         var rows = await connections.FindAsync(new SearchOptions<ChatConnection>
         {
-            Query = row => (row.RequesterUserId == userId || row.RecipientUserId == userId) && row.Status != ChatConnectionState.Declined,
+            Query = row => row.TenantId == tenant && (row.RequesterUserId == userId || row.RecipientUserId == userId) && row.Status != ChatConnectionState.Declined,
             CancellationToken = cancellationToken,
         });
 
@@ -211,6 +214,7 @@ public sealed partial class ChatService
         {
             var saved = await messages.InsertAsync(new ChatMessage
             {
+                TenantId = Tenant,
                 Content = row.Introduction,
                 Timestamp = DateTime.UtcNow,
                 FromUserId = row.RequesterUserId,
@@ -270,6 +274,7 @@ public sealed partial class ChatService
         {
             await connections.InsertAsync(new ChatConnection
             {
+                TenantId = Tenant,
                 RequesterUserId = fromUserId,
                 RecipientUserId = toUserId,
                 Status = ChatConnectionState.Accepted,
@@ -285,20 +290,24 @@ public sealed partial class ChatService
         await connections.UpdateAsync(existing, ContextOptions.ForCancellationToken(cancellationToken));
     }
 
-    private async Task<ChatConnection?> FindConnectionAsync(string firstUserId, string secondUserId, CancellationToken cancellationToken) =>
-        await connections.FindOneAsync(new SearchOptions<ChatConnection>
+    private async Task<ChatConnection?> FindConnectionAsync(string firstUserId, string secondUserId, CancellationToken cancellationToken)
+    {
+        string tenant = Tenant;
+        return await connections.FindOneAsync(new SearchOptions<ChatConnection>
         {
-            Query = row =>
-                (row.RequesterUserId == firstUserId && row.RecipientUserId == secondUserId)
-                || (row.RequesterUserId == secondUserId && row.RecipientUserId == firstUserId),
+            Query = row => row.TenantId == tenant
+                && ((row.RequesterUserId == firstUserId && row.RecipientUserId == secondUserId)
+                    || (row.RequesterUserId == secondUserId && row.RecipientUserId == firstUserId)),
             CancellationToken = cancellationToken,
         });
+    }
 
     private async Task<List<string>> AcceptedIdsAsync(string userId, CancellationToken cancellationToken)
     {
+        string tenant = Tenant;
         var rows = await connections.FindAsync(new SearchOptions<ChatConnection>
         {
-            Query = row => row.Status == ChatConnectionState.Accepted && (row.RequesterUserId == userId || row.RecipientUserId == userId),
+            Query = row => row.TenantId == tenant && row.Status == ChatConnectionState.Accepted && (row.RequesterUserId == userId || row.RecipientUserId == userId),
             CancellationToken = cancellationToken,
         });
         return rows

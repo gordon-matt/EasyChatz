@@ -8,7 +8,8 @@ public sealed class ChatNotificationService(
     IRepository<ChatMessage> messages,
     IChatUserDirectory directory,
     IChatCurrentUser currentUser,
-    IChatRealtime realtime) : IChatNotificationService, IChatDeliveryQueue
+    IChatRealtime realtime,
+    IChatTenant tenants) : IChatNotificationService, IChatDeliveryQueue
 {
     /// <summary>
     /// Creates the value.
@@ -22,6 +23,7 @@ public sealed class ChatNotificationService(
     {
         await notifications.InsertAsync(new MessageNotification
         {
+            TenantId = Tenant,
             ChatMessageId = chatMessageId,
             FromUserId = fromUserId,
             ToUserId = toUserId,
@@ -90,8 +92,9 @@ public sealed class ChatNotificationService(
             return Result.Success();
         }
 
+        string tenant = Tenant;
         await notifications.UpdateAsync(
-            n => directIds.Contains(n.Id) && !n.IsRead,
+            n => n.TenantId == tenant && directIds.Contains(n.Id) && !n.IsRead,
             setters => setters.SetProperty(n => n.IsRead, true),
             ContextOptions.ForCancellationToken(cancellationToken));
 
@@ -136,10 +139,11 @@ public sealed class ChatNotificationService(
             return Result<IReadOnlyDictionary<int, int>>.Success(new Dictionary<int, int>());
         }
 
+        string tenant = Tenant;
         Dictionary<int, int> roomByMessage;
         using (var connection = messages.OpenConnection())
         {
-            var found = await connection.Query(m => messageIds.Contains(m.Id) && m.ToRoomId != null)
+            var found = await connection.Query(m => m.TenantId == tenant && messageIds.Contains(m.Id) && m.ToRoomId != null)
                 .Select(m => new { m.Id, m.ToRoomId })
                 .ToListAsync(cancellationToken);
             roomByMessage = found.ToDictionary(m => m.Id, m => m.ToRoomId!.Value);
@@ -178,8 +182,9 @@ public sealed class ChatNotificationService(
             return Result.Success();
         }
 
+        string tenant = Tenant;
         await notifications.UpdateAsync(
-            n => noticeIds.Contains(n.Id) && !n.IsRead,
+            n => n.TenantId == tenant && noticeIds.Contains(n.Id) && !n.IsRead,
             setters => setters.SetProperty(n => n.IsRead, true),
             ContextOptions.ForCancellationToken(cancellationToken));
 
@@ -187,10 +192,13 @@ public sealed class ChatNotificationService(
         return Result.Success();
     }
 
+    private string Tenant => Constants.TenantKey(tenants.TenantId);
+
     private async Task<List<MessageNotification>> UnreadAsync(string userId, CancellationToken cancellationToken)
     {
+        string tenant = Tenant;
         using var connection = notifications.OpenConnection();
-        return await connection.Query(n => n.ToUserId == userId && !n.IsRead).ToListAsync(cancellationToken);
+        return await connection.Query(n => n.TenantId == tenant && n.ToUserId == userId && !n.IsRead).ToListAsync(cancellationToken);
     }
 
     /// <summary>Message ids among <paramref name="messageIds"/> that belong to a room, or to one room when <paramref name="roomId"/> is set.</summary>
@@ -202,10 +210,11 @@ public sealed class ChatNotificationService(
             return [];
         }
 
+        string tenant = Tenant;
         using var connection = messages.OpenConnection();
         List<int> found = roomId is int only
-            ? await connection.Query(m => ids.Contains(m.Id) && m.ToRoomId == only).Select(m => m.Id).ToListAsync(cancellationToken)
-            : await connection.Query(m => ids.Contains(m.Id) && m.ToRoomId != null).Select(m => m.Id).ToListAsync(cancellationToken);
+            ? await connection.Query(m => m.TenantId == tenant && ids.Contains(m.Id) && m.ToRoomId == only).Select(m => m.Id).ToListAsync(cancellationToken)
+            : await connection.Query(m => m.TenantId == tenant && ids.Contains(m.Id) && m.ToRoomId != null).Select(m => m.Id).ToListAsync(cancellationToken);
         return found.ToHashSet();
     }
 
@@ -240,7 +249,7 @@ public sealed class ChatNotificationService(
 
         return rows
             .Where(n => content.ContainsKey(n.ChatMessageId))
-            .Select(n => new ChatPendingNotice(n.Id, n.ChatMessageId, n.FromUserId, n.ToUserId, content[n.ChatMessageId], n.CreatedAtUtc))
+            .Select(n => new ChatPendingNotice(n.Id, n.ChatMessageId, n.FromUserId, n.ToUserId, content[n.ChatMessageId], n.CreatedAtUtc, n.TenantId))
             .ToList();
     }
 

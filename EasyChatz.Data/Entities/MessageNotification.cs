@@ -3,6 +3,9 @@ namespace EasyChatz.Data.Entities;
 /// <summary>One row per direct message, so a recipient can see what they have not opened yet.</summary>
 public class MessageNotification : BaseEntity<int>
 {
+    /// <summary>Host tenant key. Empty for a single-tenant host. Copied from the message so a badge query does not join.</summary>
+    public string TenantId { get; set; } = string.Empty;
+
     /// <summary>
     /// Gets or sets the chat message identifier.
     /// </summary>
@@ -48,6 +51,7 @@ public class MessageNotificationMap : IEntityTypeConfiguration<MessageNotificati
     {
         builder.ToTable(Constants.Tables.Notifications, Constants.Schema);
         builder.HasKey(m => m.Id);
+        builder.Property(m => m.TenantId).IsRequired().HasMaxLength(Constants.MaxLengths.TenantId).IsUnicode(false).HasDefaultValue(string.Empty);
         builder.Property(m => m.FromUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.ToUserId).IsRequired().HasMaxLength(Constants.MaxLengths.UserId).IsUnicode(false);
         builder.Property(m => m.CreatedAtUtc).HasConversion(UtcDateTimeConverter.Instance);
@@ -58,7 +62,7 @@ public class MessageNotificationMap : IEntityTypeConfiguration<MessageNotificati
             .HasForeignKey(m => m.ChatMessageId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(m => new { m.ToUserId, m.FromUserId, m.IsRead });
+        builder.HasIndex(m => new { m.TenantId, m.ToUserId, m.FromUserId, m.IsRead });
         builder.HasIndex(m => new { m.IsRead, m.DeliveredAtUtc });
     }
 }

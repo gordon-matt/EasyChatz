@@ -43,13 +43,14 @@ internal sealed class EasyChatzDatabaseInitializer(
         {
             string name = options.Value.AnnouncementsRoomName;
             bool exists = await rooms.ExistsAsync(
-                r => r.Name == name,
+                r => r.TenantId == string.Empty && r.Name == name,
                 ContextOptions.ForCancellationToken(cancellationToken));
 
             if (!exists)
             {
                 await rooms.InsertAsync(new ChatRoom
                 {
+                    TenantId = string.Empty,
                     Name = name,
                     AdminUserId = Constants.SystemUserId,
                     CreatedAtUtc = DateTime.UtcNow,
