@@ -38,7 +38,7 @@ public sealed partial class ChatService(
     {
         var value = options.Value;
         return Task.FromResult(Result<ChatFeaturesDto>.Success(
-            new ChatFeaturesDto(value.AllowRoomArchive, value.AllowUserBlocks, value.AllowMessageDelete)));
+            new ChatFeaturesDto(value.AllowRoomArchive, value.AllowUserBlocks, value.AllowMessageDelete, value.AllowRooms)));
     }
 
     /// <summary>
@@ -48,6 +48,11 @@ public sealed partial class ChatService(
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat rooms.</returns>
     public async Task<Result<IReadOnlyList<ChatRoomDto>>> GetRoomsAsync(CancellationToken cancellationToken = default)
     {
+        if (!options.Value.AllowRooms)
+        {
+            return Result<IReadOnlyList<ChatRoomDto>>.Success([]);
+        }
+
         string announcements = options.Value.AnnouncementsRoomName;
         var found = (await rooms.FindAsync(new SearchOptions<ChatRoom>
         {
@@ -67,6 +72,11 @@ public sealed partial class ChatService(
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room.</returns>
     public async Task<Result<ChatRoomDto>> GetRoomAsync(int roomId, CancellationToken cancellationToken = default)
     {
+        if (RoomsClosed<ChatRoomDto>() is { } closed)
+        {
+            return closed;
+        }
+
         var room = await rooms.FindOneAsync(roomId);
         if (room is null)
         {
@@ -85,6 +95,11 @@ public sealed partial class ChatService(
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room.</returns>
     public async Task<Result<ChatRoomDto>> CreateRoomAsync(string name, CancellationToken cancellationToken = default)
     {
+        if (RoomsClosed<ChatRoomDto>() is { } closed)
+        {
+            return closed;
+        }
+
         var actor = await RequireAsync(cancellationToken);
         if (!actor.IsSuccess)
         {
@@ -125,6 +140,11 @@ public sealed partial class ChatService(
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room updated.</returns>
     public async Task<Result<ChatRoomUpdatedDto>> UpdateRoomAsync(int roomId, string name, CancellationToken cancellationToken = default)
     {
+        if (RoomsClosed<ChatRoomUpdatedDto>() is { } closed)
+        {
+            return closed;
+        }
+
         var actor = await RequireAsync(cancellationToken);
         if (!actor.IsSuccess)
         {
@@ -170,6 +190,11 @@ public sealed partial class ChatService(
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat room removed.</returns>
     public async Task<Result<ChatRoomRemovedDto>> DeleteRoomAsync(int roomId, CancellationToken cancellationToken = default)
     {
+        if (RoomsClosed<ChatRoomRemovedDto>() is { } closed)
+        {
+            return closed;
+        }
+
         var actor = await RequireAsync(cancellationToken);
         if (!actor.IsSuccess)
         {
@@ -229,6 +254,11 @@ public sealed partial class ChatService(
     public async Task<Result<IReadOnlyList<ChatMessageDto>>> GetRoomMessagesAsync(
         int roomId, int? take = null, int? beforeId = null, CancellationToken cancellationToken = default)
     {
+        if (RoomsClosed<IReadOnlyList<ChatMessageDto>>() is { } closed)
+        {
+            return closed;
+        }
+
         var room = await rooms.FindOneAsync(roomId);
         if (room is null)
         {
@@ -252,6 +282,11 @@ public sealed partial class ChatService(
     /// <returns>A task that represents the asynchronous operation. The task result is the outcome for the chat message.</returns>
     public async Task<Result<ChatMessageDto>> SendRoomMessageAsync(int roomId, string content, CancellationToken cancellationToken = default)
     {
+        if (RoomsClosed<ChatMessageDto>() is { } closed)
+        {
+            return closed;
+        }
+
         var actor = await RequireAsync(cancellationToken);
         if (!actor.IsSuccess)
         {
@@ -567,6 +602,11 @@ public sealed partial class ChatService(
 
     private async Task<Result<ChatRoomDto>> SetArchivedAsync(int roomId, bool archived, CancellationToken cancellationToken)
     {
+        if (RoomsClosed<ChatRoomDto>() is { } closed)
+        {
+            return closed;
+        }
+
         if (!options.Value.AllowRoomArchive)
         {
             return Result<ChatRoomDto>.Forbidden("Archiving rooms is turned off.");
@@ -729,6 +769,9 @@ public sealed partial class ChatService(
 
         return new BlockSets(byMe, byThem);
     }
+
+    private Result<T>? RoomsClosed<T>() =>
+        options.Value.AllowRooms ? null : Result<T>.Forbidden("Rooms are turned off.");
 
     private async Task<Result<ChatUser>> RequireAsync(CancellationToken cancellationToken)
     {

@@ -104,7 +104,8 @@ public sealed record ChatConversationDto(
 /// <param name="AllowRoomArchive">Whether room archive is available.</param>
 /// <param name="AllowUserBlocks">Whether direct-message blocks are available.</param>
 /// <param name="AllowMessageDelete">Whether message delete is available.</param>
-public sealed record ChatFeaturesDto(bool AllowRoomArchive, bool AllowUserBlocks, bool AllowMessageDelete);
+/// <param name="AllowRooms">Whether rooms are available. Direct messages stay available when this is false.</param>
+public sealed record ChatFeaturesDto(bool AllowRoomArchive, bool AllowUserBlocks, bool AllowMessageDelete, bool AllowRooms = true);
 
 /// <summary>A direct-message block was added or removed. IsBlocked is false when it was removed.</summary>
 /// <param name="BlockerUserId">The person who blocked.</param>

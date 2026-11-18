@@ -41,6 +41,9 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     private bool disposed;
     private bool peopleOpen;
     private bool newRoomOpen;
+    private bool composeOpen;
+    private string personQuery = string.Empty;
+    private readonly List<ChatMentionDto> people = [];
     private bool renameOpen;
     private bool confirmDelete;
     private bool confirmArchive;
@@ -242,7 +245,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             appliedWithUserId = WithUserId;
             await OpenWithUserAsync(WithUserId);
         }
-        else if (rooms.Count > 0)
+        else if (features.AllowRooms && rooms.Count > 0)
         {
             await OpenRoomAsync(rooms[0]);
         }
@@ -410,11 +413,20 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     private async Task ReloadListsAsync()
     {
-        var roomResult = await ChatService.GetRoomsAsync();
-        if (roomResult.IsSuccess && roomResult.Value is not null)
+        if (features.AllowRooms)
+        {
+            var roomResult = await ChatService.GetRoomsAsync();
+            if (roomResult.IsSuccess && roomResult.Value is not null)
+            {
+                rooms.Clear();
+                rooms.AddRange(roomResult.Value);
+            }
+
+            await LoadRoomMentionsAsync();
+        }
+        else
         {
             rooms.Clear();
-            rooms.AddRange(roomResult.Value);
         }
 
         var conversationResult = await ChatService.GetConversationsAsync();
@@ -423,8 +435,37 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             conversations.Clear();
             conversations.AddRange(conversationResult.Value);
         }
+    }
 
-        await LoadRoomMentionsAsync();
+    private async Task OpenComposeAsync()
+    {
+        personQuery = string.Empty;
+        composeOpen = true;
+        await SearchPeopleAsync();
+    }
+
+    private void CloseCompose() => composeOpen = false;
+
+    private async Task OnPersonQueryAsync(ChangeEventArgs change)
+    {
+        personQuery = change.Value?.ToString() ?? string.Empty;
+        await SearchPeopleAsync();
+    }
+
+    private async Task SearchPeopleAsync()
+    {
+        var found = await ChatService.SearchMentionsAsync(personQuery, 8);
+        people.Clear();
+        if (found.IsSuccess && found.Value is not null)
+        {
+            people.AddRange(found.Value);
+        }
+    }
+
+    private async Task ChoosePersonAsync(string userId)
+    {
+        composeOpen = false;
+        await OpenWithUserAsync(userId);
     }
 
     /// <summary>Puts a badge on each room that mentioned the user before this page was open.</summary>

@@ -451,6 +451,7 @@
 }
 .ec-dialog input:focus { border-color: var(--ec-accent); }
 .ec-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.ec-dialog .ec-nav { max-height: 240px; overflow: auto; margin-top: 10px; }
 
 @container ec-shell (max-width: 760px) {
     .ec-shell { flex-direction: column; }

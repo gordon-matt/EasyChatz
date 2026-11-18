@@ -23,13 +23,19 @@
                             <Icon Name="users" />
                         </button>
                     }
-                    @if (features.AllowRoomArchive)
+                    @if (features.AllowRooms && features.AllowRoomArchive)
                     {
                         <button type="button" class="ec-icon-button @(showArchived ? "ec-pressed" : null)" title="@(showArchived ? "Hide archived" : "Show archived")" aria-pressed="@showArchived" @onclick="() => showArchived = !showArchived">
                             <Icon Name="archive" />
                         </button>
                     }
-                    @if (me.CanCreateRooms)
+                    @if (!features.AllowRooms)
+                    {
+                        <button type="button" class="ec-icon-button" title="New message" @onclick="OpenComposeAsync">
+                            <Icon Name="plus" />
+                        </button>
+                    }
+                    @if (features.AllowRooms && me.CanCreateRooms)
                     {
                         <button type="button" class="ec-icon-button" title="New room" @onclick="OpenNewRoom">
                             <Icon Name="plus" />
@@ -41,38 +47,41 @@
                 </label>
 
                 <div class="ec-nav">
-                    <p class="ec-nav-label">Rooms</p>
-                    @if (!VisibleRooms.Any())
+                    @if (features.AllowRooms)
                     {
-                        <p class="ec-empty">@(rooms.Count == 0 ? "No rooms yet." : "No rooms to show.")</p>
-                    }
-                    @foreach (var room in VisibleRooms)
-                    {
-                        bool active = activeRoom?.Id == room.Id;
-                        int unread = roomUnread.GetValueOrDefault(room.Id);
-                        <button type="button" class="ec-nav-item @(active ? "ec-active" : null)" @onclick="() => OpenRoomAsync(room)">
-                            <span class="ec-avatar ec-avatar-room">
-                                <Icon Name="@(IsAnnouncements(room) ? "megaphone" : "hash")" />
-                            </span>
-                            <span class="ec-nav-copy">
-                                <span class="ec-nav-title">@room.Name</span>
-                                <span class="ec-nav-meta">@room.AdminDisplayName</span>
-                            </span>
-                            @if (features.AllowRoomArchive && room.IsArchived)
-                            {
-                                <span class="ec-nav-mark" title="Archived"><Icon Name="archive" /></span>
-                            }
-                            @if (unread > 0 && !active)
-                            {
-                                <span class="ec-badge @(roomMentioned.Contains(room.Id) ? "ec-badge-mention" : null)" title="@(roomMentioned.Contains(room.Id) ? "You were mentioned" : null)">@(roomMentioned.Contains(room.Id) ? $"@{unread}" : unread.ToString())</span>
-                            }
-                        </button>
+                        <p class="ec-nav-label">Rooms</p>
+                        @if (!VisibleRooms.Any())
+                        {
+                            <p class="ec-empty">@(rooms.Count == 0 ? "No rooms yet." : "No rooms to show.")</p>
+                        }
+                        @foreach (var room in VisibleRooms)
+                        {
+                            bool active = activeRoom?.Id == room.Id;
+                            int unread = roomUnread.GetValueOrDefault(room.Id);
+                            <button type="button" class="ec-nav-item @(active ? "ec-active" : null)" @onclick="() => OpenRoomAsync(room)">
+                                <span class="ec-avatar ec-avatar-room">
+                                    <Icon Name="@(IsAnnouncements(room) ? "megaphone" : "hash")" />
+                                </span>
+                                <span class="ec-nav-copy">
+                                    <span class="ec-nav-title">@room.Name</span>
+                                    <span class="ec-nav-meta">@room.AdminDisplayName</span>
+                                </span>
+                                @if (features.AllowRoomArchive && room.IsArchived)
+                                {
+                                    <span class="ec-nav-mark" title="Archived"><Icon Name="archive" /></span>
+                                }
+                                @if (unread > 0 && !active)
+                                {
+                                    <span class="ec-badge @(roomMentioned.Contains(room.Id) ? "ec-badge-mention" : null)" title="@(roomMentioned.Contains(room.Id) ? "You were mentioned" : null)">@(roomMentioned.Contains(room.Id) ? $"@{unread}" : unread.ToString())</span>
+                                }
+                            </button>
+                        }
                     }
 
-                    <p class="ec-nav-label">Direct messages</p>
+                    <p class="ec-nav-label">@(features.AllowRooms ? "Direct messages" : "Messages")</p>
                     @if (!VisibleConversations.Any())
                     {
-                        <p class="ec-empty">No direct messages yet.</p>
+                        <p class="ec-empty">@(features.AllowRooms ? "No direct messages yet." : "No messages yet.")</p>
                     }
                     @foreach (var conversation in VisibleConversations)
                     {
@@ -105,7 +114,7 @@
                     <div class="ec-gate">
                         <Icon Name="message" />
                         <h2>Pick a conversation</h2>
-                        <p>Rooms are open to everyone. Direct messages stay between the two of you.</p>
+                        <p>@(features.AllowRooms ? "Rooms are open to everyone. Direct messages stay between the two of you." : "Direct messages stay between the two of you.")</p>
                     </div>
                 }
                 else
@@ -246,6 +255,32 @@
                     }
                 </aside>
             }
+        }
+
+        @if (composeOpen)
+        {
+            <div class="ec-modal" @onclick="CloseCompose">
+                <div class="ec-dialog" @onclick:stopPropagation="true">
+                    <h3>New message</h3>
+                    <input value="@personQuery" @oninput="OnPersonQueryAsync" placeholder="Name" aria-label="Name" />
+                    <div class="ec-nav">
+                        @if (people.Count == 0)
+                        {
+                            <p class="ec-empty">No members to show.</p>
+                        }
+                        @foreach (var person in people)
+                        {
+                            <button type="button" class="ec-nav-item" @onclick="() => ChoosePersonAsync(person.UserId)">
+                                <span class="ec-avatar">@Initials(person.DisplayName)</span>
+                                <span class="ec-nav-title">@person.DisplayName</span>
+                            </button>
+                        }
+                    </div>
+                    <div class="ec-dialog-actions">
+                        <button type="button" class="ec-text-button" @onclick="CloseCompose">Cancel</button>
+                    </div>
+                </div>
+            </div>
         }
 
         @if (newRoomOpen)

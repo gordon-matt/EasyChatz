@@ -234,6 +234,7 @@ public sealed class ChatServiceTests
         Assert.False(features.Value!.AllowRoomArchive);
         Assert.False(features.Value.AllowUserBlocks);
         Assert.False(features.Value.AllowMessageDelete);
+        Assert.True(features.Value.AllowRooms);
 
         var room = (await database.Chat.CreateRoomAsync("General", cancellationToken)).Value!;
         var archived = await database.Chat.ArchiveRoomAsync(room.Id, cancellationToken);
@@ -250,6 +251,25 @@ public sealed class ChatServiceTests
 
         var deleted = await database.Chat.DeleteMessageAsync(posted.Value!.Id, cancellationToken);
         Assert.Equal(ResultStatus.Forbidden, deleted.Status);
+    }
+
+    [Fact]
+    public async Task Rooms_can_be_turned_off_without_blocking_direct_messages()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync(options => options.AllowRooms = false);
+
+        var features = await database.Chat.GetFeaturesAsync(cancellationToken);
+        Assert.False(features.Value!.AllowRooms);
+
+        var rooms = await database.Chat.GetRoomsAsync(cancellationToken);
+        Assert.Empty(rooms.Value!);
+
+        var created = await database.Chat.CreateRoomAsync("General", cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, created.Status);
+
+        var sent = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
+        Assert.True(sent.IsSuccess);
     }
     [Fact]
     public async Task Room_mentions_are_rewritten_with_the_real_name_and_unknown_people_become_plain_text()

@@ -24,6 +24,12 @@ public sealed class EasyChatzOptions
     public string HubPath { get; set; } = Constants.DefaultHubPath;
 
     /// <summary>
+    /// When set, people can use rooms, including the seeded announcements room.
+    /// Turn this off for a host that only wants direct messages. Existing rooms stay stored and are hidden.
+    /// </summary>
+    public bool AllowRooms { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the announcements room name.
     /// </summary>
     public string AnnouncementsRoomName { get; set; } = Constants.AnnouncementsRoomName;

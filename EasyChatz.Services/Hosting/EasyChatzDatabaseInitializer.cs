@@ -27,6 +27,11 @@ internal sealed class EasyChatzDatabaseInitializer(
             }
         }
 
+        if (!options.Value.AllowRooms)
+        {
+            return;
+        }
+
         try
         {
             string name = options.Value.AnnouncementsRoomName;
