@@ -8,7 +8,14 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddDemoUsers();
 builder.Services
-    .AddEasyChatz()
+    .AddEasyChatz(options =>
+    {
+        options.SystemDisplayName = "EasyChatz Demo";
+
+        // For demo purposes, let anyone chat with anyone.
+        // If this is enabled, the host needs to provide a way for users to initiate conntact with each other
+        options.RequireConnections = false;
+    })
     .AddEasyChatzSqlite(builder.Configuration.GetConnectionString("EasyChatz"));
 
 var app = builder.Build();

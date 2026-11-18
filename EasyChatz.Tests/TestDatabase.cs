@@ -80,6 +80,12 @@ public sealed class TestDatabase : IAsyncDisposable
 
     public IChatDeliveryQueue Delivery => scope.ServiceProvider.GetRequiredService<IChatDeliveryQueue>();
 
+    public async Task<IReadOnlyList<ChatConnection>> ConnectionsAsync(CancellationToken cancellationToken = default)
+    {
+        var connections = provider.GetRequiredService<IRepository<ChatConnection>>();
+        return (await connections.FindAsync(new SearchOptions<ChatConnection> { CancellationToken = cancellationToken })).ToList();
+    }
+
     public static Task<TestDatabase> CreateAsync() => CreateAsync(configure: null);
 
     public static async Task<TestDatabase> CreateAsync(Action<EasyChatzOptions>? configure)
@@ -95,7 +101,12 @@ public sealed class TestDatabase : IAsyncDisposable
         services.AddLogging();
         services.AddSingleton<IChatCurrentUser>(currentUser);
         services.AddSingleton<IChatUserDirectory, TestDirectory>();
-        services.AddEasyChatzServices(configure).AddEasyChatzSqlite(connectionString);
+        services.AddEasyChatzServices(options =>
+        {
+            // The product asks before a first message. These tests cover open messaging unless a test opts in.
+            options.RequireConnections = false;
+            configure?.Invoke(options);
+        }).AddEasyChatzSqlite(connectionString);
 
         var provider = services.BuildServiceProvider(validateScopes: true);
         await using (var context = provider.GetRequiredService<IEasyChatzDbContextFactory>().GetContext())

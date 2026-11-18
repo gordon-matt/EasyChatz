@@ -20,6 +20,9 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
     private IChatNotificationService Notifications { get; set; } = default!;
 
     [Inject]
+    private IChatService ChatService { get; set; } = default!;
+
+    [Inject]
     private EasyChatzApiAddress Address { get; set; } = default!;
 
     [Inject]
@@ -122,6 +125,9 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
     private async Task RefreshAsync()
     {
         var unread = await Notifications.CountUnreadAsync();
-        Count = unread.IsSuccess ? unread.Value : 0;
+        var requests = await ChatService.CountIncomingRequestsAsync();
+        int messages = unread.IsSuccess ? unread.Value : 0;
+        int waiting = requests.IsSuccess ? requests.Value : 0;
+        Count = messages + waiting;
     }
 }

@@ -58,6 +58,18 @@ public static class EndpointRouteBuilderExtensions
             group.MapGet(ApiRoutes.ConversationMessages, async (string userId, int? take, int? beforeId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.GetPrivateMessagesAsync(userId, take, beforeId, cancellationToken)).ToHttpResult());
 
+            group.MapPost("conversations/{userId}/connection", async (string userId, ConnectionRequest? request, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.RequestConnectionAsync(userId, request?.Introduction, cancellationToken)).ToHttpResult());
+
+            group.MapPost("conversations/{userId}/connection/accept", async (string userId, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.AcceptConnectionAsync(userId, cancellationToken)).ToHttpResult());
+
+            group.MapPost("conversations/{userId}/connection/decline", async (string userId, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.DeclineConnectionAsync(userId, cancellationToken)).ToHttpResult());
+
+            group.MapGet("people", async (string? q, int? take, IChatService chat, CancellationToken cancellationToken) =>
+                (await chat.SearchPeopleAsync(q, take ?? 8, cancellationToken)).ToHttpResult());
+
             group.MapPost(ApiRoutes.ConversationBlock, async (string userId, IChatService chat, CancellationToken cancellationToken) =>
                 (await chat.BlockUserAsync(userId, cancellationToken)).ToHttpResult());
 

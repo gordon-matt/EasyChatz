@@ -78,7 +78,7 @@ builder.Services.AddEasyChatzMySql(connectionString);      // EasyChatz.Data.MyS
 }
 ```
 
-Other settings on `EasyChatzOptions`: `ApiPrefix` (default `api/easychatz`), `HubPath` (default `/chathub`), `AllowRooms` (default true; turn it off for direct messages only), `AnnouncementsRoomName`, `MaxMessageLength` (2000), `MaxRoomNameLength` (100), `DefaultPageSize` (50), and `MaxPageSize` (200).
+Other settings on `EasyChatzOptions`: `ApiPrefix` (default `api/easychatz`), `HubPath` (default `/chathub`), `AllowRooms` (default true; turn it off for direct messages only), `RequireConnections` (default true; a first direct message waits until the other person accepts), `AnnouncementsRoomName`, `MaxMessageLength` (2000), `MaxRoomNameLength` (100), `DefaultPageSize` (50), and `MaxPageSize` (200).
 
 ### Blazor
 

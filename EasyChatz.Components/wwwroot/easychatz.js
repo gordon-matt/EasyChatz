@@ -51,6 +51,7 @@ export async function connect(sessionId, hubUrl, includeCredentials, dotNetRef) 
     connection.on('addChatRoom', room => { raise('OnRoomAdded', room); });
     connection.on('archiveChatRoom', room => { raise('OnRoomArchived', room); });
     connection.on('userBlockChanged', change => { raise('OnUserBlocked', change); });
+    connection.on('connectionChanged', change => { raise('OnConnectionChanged', change); });
     connection.on('updateChatRoom', room => { raise('OnRoomUpdated', room); });
     connection.on('removeChatRoom', room => { raise('OnRoomRemoved', room); });
     connection.on('onRoomDeleted', room => { raise('OnRoomDeleted', room); });
@@ -71,6 +72,11 @@ export async function connect(sessionId, hubUrl, includeCredentials, dotNetRef) 
 
     await connection.start();
     sessions.set(sessionId, session);
+}
+
+export async function syncPresence(sessionId) {
+    const session = sessionOrThrow(sessionId);
+    await session.connection.invoke('SyncPresence');
 }
 
 export async function join(sessionId, roomName) {
@@ -330,6 +336,7 @@ export async function watchUnread(sessionId, hubUrl, includeCredentials, dotNetR
 
     connection.on('newPrivateMessage', raise);
     connection.on('unreadChanged', raise);
+    connection.on('connectionChanged', raise);
     connection.onreconnected(async () => {
         await connection.invoke('Rejoin');
     });

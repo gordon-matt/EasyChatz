@@ -76,6 +76,9 @@ public static class Constants
         /// The user blocks constant.
         /// </summary>
         public const string UserBlocks = "UserBlocks";
+
+        /// <summary>Direct-message connection requests.</summary>
+        public const string Connections = "Connections";
     }
 
     /// <summary>
@@ -201,6 +204,9 @@ public static class Constants
         /// The user block changed constant.
         /// </summary>
         public const string UserBlockChanged = "userBlockChanged";
+
+        /// <summary>A connection request was sent, accepted, or declined.</summary>
+        public const string ConnectionChanged = "connectionChanged";
     }
 
     /// <summary>

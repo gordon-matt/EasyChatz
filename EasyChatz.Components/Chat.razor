@@ -78,6 +78,21 @@
                         }
                     }
 
+                    @if (IncomingRequests.Any())
+                    {
+                        <p class="ec-nav-label">Requests</p>
+                        @foreach (var request in IncomingRequests)
+                        {
+                            <button type="button" class="ec-nav-item @(activeConversation?.UserId == request.UserId ? "ec-active" : null)" @onclick="() => OpenConversationAsync(request)">
+                                <span class="ec-avatar">@Initials(request.DisplayName)</span>
+                                <span class="ec-nav-copy">
+                                    <span class="ec-nav-title">@request.DisplayName</span>
+                                    <span class="ec-nav-meta">Wants to connect</span>
+                                </span>
+                            </button>
+                        }
+                    }
+
                     <p class="ec-nav-label">@(features.AllowRooms ? "Direct messages" : "Messages")</p>
                     @if (!VisibleConversations.Any())
                     {
@@ -95,6 +110,10 @@
                             <span class="ec-nav-copy">
                                 <span class="ec-nav-title">@conversation.DisplayName</span>
                             </span>
+                            @if (conversation.Connection == ChatConnectionStatus.PendingOutgoing)
+                            {
+                                <span class="ec-nav-mark" title="Waiting for them to accept">…</span>
+                            }
                             @if (features.AllowUserBlocks && (conversation.BlockedByMe || conversation.HasBlockedMe))
                             {
                                 <span class="ec-nav-mark" title="@(conversation.BlockedByMe ? "Blocked" : "Can't message")"><Icon Name="ban" /></span>
@@ -212,6 +231,24 @@
                     {
                         <p class="ec-hint ec-block-note">You blocked @activeConversation.DisplayName. They can't message you.</p>
                     }
+                    @if (features.RequireConnections && activeConversation is { Connection: ChatConnectionStatus.PendingIncoming })
+                    {
+                        <div class="ec-hint">
+                            <p>@activeConversation.DisplayName wants to connect.</p>
+                            @if (!string.IsNullOrWhiteSpace(activeConversation.Introduction))
+                            {
+                                <p>@activeConversation.Introduction</p>
+                            }
+                            <button type="button" class="ec-send" @onclick="() => AcceptRequestAsync(activeConversation.UserId)">Accept</button>
+                            <button type="button" class="ec-text-button" @onclick="() => DeclineRequestAsync(activeConversation.UserId)">Decline</button>
+                        </div>
+                    }
+                    else if (features.RequireConnections && activeConversation is { Connection: ChatConnectionStatus.PendingOutgoing })
+                    {
+                        <p class="ec-hint">Waiting for @activeConversation.DisplayName to accept.</p>
+                    }
+                    else
+                    {
                     <form class="ec-composer" @onsubmit="SendAsync" @onsubmit:preventDefault>
                         @if (ReadOnlyThread)
                         {
@@ -219,13 +256,14 @@
                         }
                         else
                         {
-                            <textarea @ref="composer" rows="1" maxlength="@MaxMessageLength" placeholder="Write a message" aria-label="Message"
+                            <textarea @ref="composer" rows="1" maxlength="@MaxMessageLength" placeholder="@(SendingRequest ? "Write a request" : "Write a message")" aria-label="Message"
                                       value="@draft" @oninput="OnDraft" @onkeydown="OnComposerKeyDown"></textarea>
                             <button type="submit" class="ec-send" disabled="@(!CanSend)" title="Send">
                                 <Icon Name="send" />
                             </button>
                         }
                     </form>
+                    }
                 }
             </section>
 

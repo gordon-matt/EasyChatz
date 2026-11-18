@@ -132,6 +132,26 @@ public interface IChatService
 
     /// <summary>People matching <paramref name="term"/> who can be mentioned in a room. The signed-in user is left out.</summary>
     Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// People the compose list may offer. When connections are required, only accepted connections are returned.
+    /// </summary>
+    Task<Result<IReadOnlyList<ChatMentionDto>>> SearchPeopleAsync(string? term, int take = 8, CancellationToken cancellationToken = default);
+
+    /// <summary>Asks <paramref name="userId"/> to connect. A note is optional. Asking again after a decline replaces the old request.</summary>
+    Task<Result<ChatConversationDto>> RequestConnectionAsync(string userId, string? introduction, CancellationToken cancellationToken = default);
+
+    /// <summary>Accepts a pending request from <paramref name="userId"/>.</summary>
+    Task<Result<ChatConversationDto>> AcceptConnectionAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Declines a pending request from <paramref name="userId"/>.</summary>
+    Task<Result<ChatConversationDto>> DeclineConnectionAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>User ids the signed-in person has accepted. Empty when connections are not required.</summary>
+    Task<Result<IReadOnlyList<string>>> GetConnectedUserIdsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Pending requests waiting for the signed-in person. Zero when connections are not required.</summary>
+    Task<Result<int>> CountIncomingRequestsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -318,5 +338,9 @@ public interface IChatRealtime
 
     /// <summary>Tells both people that a direct-message block was added or removed.</summary>
     Task PublishUserBlockChangedAsync(ChatBlockChangedDto change, CancellationToken cancellationToken = default) =>
+        Task.CompletedTask;
+
+    /// <summary>Tells both people that a connection request changed.</summary>
+    Task PublishConnectionChangedAsync(ChatConnectionChangedDto change, CancellationToken cancellationToken = default) =>
         Task.CompletedTask;
 }

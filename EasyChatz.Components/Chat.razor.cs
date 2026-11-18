@@ -118,6 +118,13 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     [Parameter]
     public string? WithUserId { get; set; }
 
+    /// <summary>
+    /// When opening <see cref="WithUserId"/>, ask to connect if that is required and you are not connected yet.
+    /// A host uses this for its own "message this person" action.
+    /// </summary>
+    [Parameter]
+    public bool ConnectOnOpen { get; set; }
+
     /// <summary>Shown beside Message in the online list when a host is listening. Hidden otherwise.</summary>
     [Parameter]
     public EventCallback<ChatPresenceDto> OnOpenUser { get; set; }
@@ -142,7 +149,18 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         ? Math.Min(length, Constants.MaxLengths.Message)
         : Constants.MaxLengths.Message;
 
-    private bool CanSend => !busy && !string.IsNullOrWhiteSpace(draft) && !ReadOnlyThread;
+    private bool AwaitingConnection =>
+        features.RequireConnections && activeConversation is
+        {
+            Connection: ChatConnectionStatus.PendingOutgoing or ChatConnectionStatus.PendingIncoming
+        };
+
+    private bool SendingRequest =>
+        features.RequireConnections
+        && activeRoom is null
+        && activeConversation is { Connection: ChatConnectionStatus.None or ChatConnectionStatus.Declined };
+
+    private bool CanSend => !busy && !string.IsNullOrWhiteSpace(draft) && !ReadOnlyThread && !AwaitingConnection;
 
     private bool ReadOnlyThread =>
         (features.AllowRoomArchive && activeRoom is { IsArchived: true })
@@ -199,6 +217,10 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             IEnumerable<ChatConversationDto> source = features.AllowUserBlocks
                 ? conversations.Where(c => !c.HasBlockedMe)
                 : conversations;
+            if (features.RequireConnections)
+            {
+                source = source.Where(c => c.Connection != ChatConnectionStatus.PendingIncoming);
+            }
             if (string.IsNullOrWhiteSpace(filter))
             {
                 return source;
@@ -216,9 +238,20 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         features.AllowUserBlocks && conversations.Any(c =>
             string.Equals(c.UserId, userId, StringComparison.Ordinal) && c.HasBlockedMe);
 
+    private IEnumerable<ChatConversationDto> IncomingRequests =>
+        features.RequireConnections
+            ? conversations.Where(item => item.Connection == ChatConnectionStatus.PendingIncoming)
+            : [];
+
+    private bool IsConnected(string userId) =>
+        conversations.Any(item =>
+            string.Equals(item.UserId, userId, StringComparison.Ordinal)
+            && item.Connection == ChatConnectionStatus.Accepted);
+
     private IEnumerable<ChatPresenceDto> OtherPeople => online
         .Where(p => me is null || !string.Equals(p.UserId, me.Id, StringComparison.Ordinal))
         .Where(p => !BlockedMe(p.UserId))
+        .Where(p => !features.RequireConnections || IsConnected(p.UserId))
         .GroupBy(p => p.UserId, StringComparer.Ordinal)
         .Select(g => g.First());
 
@@ -243,7 +276,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(WithUserId))
         {
             appliedWithUserId = WithUserId;
-            await OpenWithUserAsync(WithUserId);
+            await OpenWithUserAsync(WithUserId, ConnectOnOpen);
         }
         else if (features.AllowRooms && rooms.Count > 0)
         {
@@ -261,7 +294,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         }
 
         appliedWithUserId = WithUserId;
-        await OpenWithUserAsync(WithUserId);
+        await OpenWithUserAsync(WithUserId, ConnectOnOpen);
     }
 
     /// <inheritdoc/>
@@ -454,7 +487,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
 
     private async Task SearchPeopleAsync()
     {
-        var found = await ChatService.SearchMentionsAsync(personQuery, 8);
+        var found = await ChatService.SearchPeopleAsync(personQuery, 8);
         people.Clear();
         if (found.IsSuccess && found.Value is not null)
         {
@@ -542,7 +575,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
         await PublishConversationAsync(new ChatConversationEvent("private", conversation.UserId, conversation.DisplayName));
     }
 
-    private async Task OpenWithUserAsync(string userId)
+    private async Task OpenWithUserAsync(string userId, bool connect = false)
     {
         var result = await ChatService.GetConversationAsync(userId);
         if (!result.IsSuccess || result.Value is null)
@@ -551,12 +584,87 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (connect
+            && features.RequireConnections
+            && result.Value.Connection is ChatConnectionStatus.None or ChatConnectionStatus.Declined)
+        {
+            var requested = await ChatService.RequestConnectionAsync(userId, null);
+            if (!requested.IsSuccess || requested.Value is null)
+            {
+                error = requested.GetDisplayMessage();
+                return;
+            }
+
+            result = requested;
+        }
+
         if (conversations.All(c => !string.Equals(c.UserId, result.Value.UserId, StringComparison.Ordinal)))
         {
             conversations.Insert(0, result.Value);
         }
 
         await OpenConversationAsync(result.Value);
+    }
+
+    private async Task AcceptRequestAsync(string userId)
+    {
+        var accepted = await ChatService.AcceptConnectionAsync(userId);
+        if (!accepted.IsSuccess || accepted.Value is null)
+        {
+            error = accepted.GetDisplayMessage();
+            return;
+        }
+
+        await ReloadListsAsync();
+        await OpenConversationAsync(accepted.Value);
+        await InvokeQuietlyAsync("syncPresence", sessionId);
+    }
+
+    private async Task DeclineRequestAsync(string userId)
+    {
+        var declined = await ChatService.DeclineConnectionAsync(userId);
+        if (!declined.IsSuccess)
+        {
+            error = declined.GetDisplayMessage();
+            return;
+        }
+
+        if (activeConversation is not null && string.Equals(activeConversation.UserId, userId, StringComparison.Ordinal))
+        {
+            activeConversation = null;
+            ResetThread();
+        }
+
+        await ReloadListsAsync();
+    }
+
+    /// <summary>A connection request changed. Reloads the list and, once accepted, the online people.</summary>
+    [JSInvokable]
+    public async Task OnConnectionChanged(string json)
+    {
+        await ReloadListsAsync();
+        var change = Read(json, EasyChatzJsonContext.Default.ChatConnectionChangedDto);
+        if (change is { Status: ChatConnectionState.Accepted })
+        {
+            await InvokeQuietlyAsync("syncPresence", sessionId);
+        }
+
+        if (activeConversation is not null
+            && change is not null
+            && (string.Equals(activeConversation.UserId, change.RequesterUserId, StringComparison.Ordinal)
+                || string.Equals(activeConversation.UserId, change.RecipientUserId, StringComparison.Ordinal)))
+        {
+            string other = string.Equals(me?.Id, change.RequesterUserId, StringComparison.Ordinal)
+                ? change.RecipientUserId
+                : change.RequesterUserId;
+            var refreshed = await ChatService.GetConversationAsync(other);
+            if (refreshed.IsSuccess && refreshed.Value is not null)
+            {
+                await OpenConversationAsync(refreshed.Value);
+            }
+        }
+
+        await RenderAsync();
     }
 
     private async Task MessagePersonAsync(ChatPresenceDto person)
@@ -686,10 +794,33 @@ public partial class Chat : ComponentBase, IAsyncDisposable
             await ConnectAsync();
         }
 
-        if (activeConversation is null || module is null || !connected)
+        if (activeConversation is null)
         {
             busy = false;
-            error = activeConversation is null ? "Choose a conversation first." : ConnectingMessage;
+            error = "Choose a conversation first.";
+            return;
+        }
+
+        if (SendingRequest)
+        {
+            var requested = await ChatService.RequestConnectionAsync(activeConversation.UserId, text);
+            busy = false;
+            if (!requested.IsSuccess || requested.Value is null)
+            {
+                error = requested.GetDisplayMessage();
+                return;
+            }
+
+            draft = string.Empty;
+            await ReloadListsAsync();
+            await OpenConversationAsync(requested.Value);
+            return;
+        }
+
+        if (module is null || !connected)
+        {
+            busy = false;
+            error = ConnectingMessage;
             return;
         }
 

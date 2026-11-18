@@ -11,6 +11,7 @@ public sealed partial class ChatService(
     IRepository<ChatRoom> rooms,
     IRepository<ChatMessage> messages,
     IRepository<ChatUserBlock> blocks,
+    IRepository<ChatConnection> connections,
     IChatNotificationService notifications,
     IChatUserDirectory directory,
     IChatCurrentUser currentUser,
@@ -38,7 +39,7 @@ public sealed partial class ChatService(
     {
         var value = options.Value;
         return Task.FromResult(Result<ChatFeaturesDto>.Success(
-            new ChatFeaturesDto(value.AllowRoomArchive, value.AllowUserBlocks, value.AllowMessageDelete, value.AllowRooms)));
+            new ChatFeaturesDto(value.AllowRoomArchive, value.AllowUserBlocks, value.AllowMessageDelete, value.AllowRooms, value.RequireConnections)));
     }
 
     /// <summary>
@@ -356,6 +357,11 @@ public sealed partial class ChatService(
             return actor.To<IReadOnlyList<ChatConversationDto>>();
         }
 
+        if (options.Value.RequireConnections)
+        {
+            return await ConnectedConversationsAsync(actor.Value.Id, cancellationToken);
+        }
+
         var latest = await PartnerActivityAsync(actor.Value.Id, cancellationToken);
         if (options.Value.AllowUserBlocks)
         {
@@ -474,6 +480,15 @@ public sealed partial class ChatService(
             return Result<ChatMessageDto>.Forbidden("You can't message this person.");
         }
 
+        if (options.Value.RequireConnections)
+        {
+            var link = await FindConnectionAsync(actor.Value.Id, recipient.Id, cancellationToken);
+            if (link is not { Status: ChatConnectionState.Accepted })
+            {
+                return Result<ChatMessageDto>.Forbidden("They have not accepted a connection yet.");
+            }
+        }
+
         var clean = await CleanMessageAsync(content, allowMentions: false, cancellationToken);
         if (!clean.IsSuccess)
         {
@@ -489,6 +504,7 @@ public sealed partial class ChatService(
         }, ContextOptions.ForCancellationToken(cancellationToken));
 
         await notifications.CreateAsync(saved.Id, actor.Value.Id, recipient.Id, cancellationToken);
+        await RememberConnectionAsync(actor.Value.Id, recipient.Id, cancellationToken);
 
         var dto = ToMessage(saved, actor.Value.DisplayName, roomName: null);
         await realtime.PublishPrivateMessageAsync(dto, cancellationToken);
@@ -722,12 +738,17 @@ public sealed partial class ChatService(
     {
         var unread = await UnreadCountsAsync(cancellationToken);
         var blockState = await BlocksBetweenAsync(userId, [person.Id], cancellationToken);
+        var link = options.Value.RequireConnections
+            ? await FindConnectionAsync(userId, person.Id, cancellationToken)
+            : null;
         return new ChatConversationDto(
             person.Id,
             person.DisplayName,
             unread.GetValueOrDefault(person.Id),
             blockState.ByMe.Contains(person.Id),
-            blockState.ByThem.Contains(person.Id));
+            blockState.ByThem.Contains(person.Id),
+            options.Value.RequireConnections ? StatusFor(userId, link) : ChatConnectionStatus.Accepted,
+            link is { Status: ChatConnectionState.Pending } && link.Introduction.Length > 0 ? link.Introduction : null);
     }
 
     private async Task<BlockSets> BlocksBetweenAsync(string userId, IEnumerable<string> otherUserIds, CancellationToken cancellationToken)

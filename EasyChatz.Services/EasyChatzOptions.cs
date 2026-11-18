@@ -30,6 +30,13 @@ public sealed class EasyChatzOptions
     public bool AllowRooms { get; set; } = true;
 
     /// <summary>
+    /// When set, a direct message to someone new is a connection request. They can accept or decline.
+    /// Until they accept, neither person sees the other as online, and the compose list stays limited
+    /// to people who already accepted. Turn this off for a private site where anyone may message anyone.
+    /// </summary>
+    public bool RequireConnections { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the announcements room name.
     /// </summary>
     public string AnnouncementsRoomName { get; set; } = Constants.AnnouncementsRoomName;

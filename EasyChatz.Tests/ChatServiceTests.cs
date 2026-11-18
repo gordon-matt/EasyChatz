@@ -271,6 +271,56 @@ public sealed class ChatServiceTests
         var sent = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
         Assert.True(sent.IsSuccess);
     }
+
+    [Fact]
+    public async Task Open_messaging_records_an_accepted_connection_for_people_already_talking()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync();
+
+        var sent = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
+        Assert.True(sent.IsSuccess);
+
+        var recorded = await database.ConnectionsAsync(cancellationToken);
+        var link = Assert.Single(recorded);
+        Assert.Equal(ChatConnectionState.Accepted, link.Status);
+        Assert.Equal("alex", link.RequesterUserId);
+        Assert.Equal("blair", link.RecipientUserId);
+    }
+
+    [Fact]
+    public async Task A_first_message_waits_until_the_other_person_accepts()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await TestDatabase.CreateAsync(options => options.RequireConnections = true);
+
+        var blocked = await database.Chat.SendPrivateMessageAsync("blair", "hello", cancellationToken);
+        Assert.Equal(ResultStatus.Forbidden, blocked.Status);
+
+        var asked = await database.Chat.RequestConnectionAsync("blair", "Can I write to you?", cancellationToken);
+        Assert.True(asked.IsSuccess);
+        Assert.Equal(ChatConnectionStatus.PendingOutgoing, asked.Value!.Connection);
+
+        var people = await database.Chat.SearchPeopleAsync("Blair", cancellationToken: cancellationToken);
+        Assert.Empty(people.Value!);
+
+        database.CurrentUser.User = TestDirectory.Blair;
+        var waiting = await database.Chat.CountIncomingRequestsAsync(cancellationToken);
+        Assert.Equal(1, waiting.Value);
+
+        var accepted = await database.Chat.AcceptConnectionAsync("alex", cancellationToken);
+        Assert.Equal(ChatConnectionStatus.Accepted, accepted.Value!.Connection);
+
+        var inbox = await database.Chat.GetPrivateMessagesAsync("alex", cancellationToken: cancellationToken);
+        Assert.Equal("Can I write to you?", inbox.Value![0].Content);
+
+        database.CurrentUser.User = TestDirectory.Alex;
+        var sent = await database.Chat.SendPrivateMessageAsync("blair", "Thanks", cancellationToken);
+        Assert.True(sent.IsSuccess);
+
+        var connected = await database.Chat.SearchPeopleAsync(string.Empty, cancellationToken: cancellationToken);
+        Assert.Contains(connected.Value!, person => person.UserId == "blair");
+    }
     [Fact]
     public async Task Room_mentions_are_rewritten_with_the_real_name_and_unknown_people_become_plain_text()
     {

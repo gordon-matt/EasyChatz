@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using EasyChatz.Services;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 namespace EasyChatz;
 
@@ -7,7 +9,7 @@ namespace EasyChatz;
 /// Presence and direct messages. Room messages are saved by <see cref="Services.IChatService"/> and
 /// broadcast from there; this hub is what the browser joins so it receives them.
 /// </summary>
-public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : Hub
+public sealed class ChatHub(IChatService chat, IChatUserDirectory directory, IOptions<EasyChatzOptions> options) : Hub
 {
     private static readonly Dictionary<string, Connection> Connections = new();
     private static readonly Lock Gate = new();
@@ -50,6 +52,24 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
     /// <param name="roomName">The room name.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     public Task Leave(string roomName) => Groups.RemoveFromGroupAsync(Context.ConnectionId, roomName);
+
+    /// <summary>Sends the caller the online people they are allowed to see. Used after a connection is accepted.</summary>
+    public async Task SyncPresence()
+    {
+        string? userId = Context.UserIdentifier ?? Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId) || IsWatching())
+        {
+            return;
+        }
+
+        List<ChatPresenceDto> existing;
+        lock (Gate)
+        {
+            existing = Connections.Values.Select(c => c.User).Where(person => person.ConnectionId != Context.ConnectionId).ToList();
+        }
+
+        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, await VisibleAsync(userId, existing));
+    }
 
     /// <summary>Puts the connection back in its user group after a reconnect.</summary>
     public Task Rejoin()
@@ -109,8 +129,8 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
             Connections[Context.ConnectionId] = new Connection(presence);
         }
 
-        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, existing);
-        await Clients.Others.SendAsync(Constants.HubEvents.AddUser, presence);
+        await Clients.Caller.SendAsync(Constants.HubEvents.SetOnlineUsers, await VisibleAsync(userId, existing));
+        await PublishPresenceAsync(userId, Constants.HubEvents.AddUser, presence);
         await base.OnConnectedAsync();
     }
 
@@ -126,10 +146,44 @@ public sealed class ChatHub(IChatService chat, IChatUserDirectory directory) : H
 
         if (connection is not null)
         {
-            await Clients.Others.SendAsync(Constants.HubEvents.RemoveUser, connection.User);
+            await PublishPresenceAsync(connection.User.UserId, Constants.HubEvents.RemoveUser, connection.User);
         }
 
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private async Task<List<ChatPresenceDto>> VisibleAsync(string userId, IReadOnlyList<ChatPresenceDto> people)
+    {
+        if (!options.Value.RequireConnections)
+        {
+            return people.ToList();
+        }
+
+        var allowed = await chat.GetConnectedUserIdsAsync();
+        var ids = allowed.IsSuccess && allowed.Value is not null
+            ? allowed.Value.ToHashSet(StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+        return people.Where(person => ids.Contains(person.UserId) && !string.Equals(person.UserId, userId, StringComparison.Ordinal)).ToList();
+    }
+
+    private async Task PublishPresenceAsync(string userId, string eventName, ChatPresenceDto presence)
+    {
+        if (!options.Value.RequireConnections)
+        {
+            await Clients.Others.SendAsync(eventName, presence);
+            return;
+        }
+
+        var allowed = await chat.GetConnectedUserIdsAsync();
+        if (!allowed.IsSuccess || allowed.Value is null)
+        {
+            return;
+        }
+
+        foreach (string otherId in allowed.Value.Where(id => !string.Equals(id, userId, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal))
+        {
+            await Clients.Group(Constants.UserGroup(otherId)).SendAsync(eventName, presence);
+        }
     }
 
     private bool IsWatching()

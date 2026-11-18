@@ -90,6 +90,15 @@ internal sealed class SignalRChatRealtime(IHubContext<ChatHub> hub) : IChatRealt
     public Task PublishRoomArchivedAsync(ChatRoomDto room, CancellationToken cancellationToken = default) =>
         hub.Clients.All.SendAsync(Constants.HubEvents.ArchiveRoom, room, cancellationToken);
 
+    public async Task PublishConnectionChangedAsync(ChatConnectionChangedDto change, CancellationToken cancellationToken = default)
+    {
+        await UserAsync(change.RequesterUserId, Constants.HubEvents.ConnectionChanged, change, cancellationToken);
+        if (!string.Equals(change.RecipientUserId, change.RequesterUserId, StringComparison.Ordinal))
+        {
+            await UserAsync(change.RecipientUserId, Constants.HubEvents.ConnectionChanged, change, cancellationToken);
+        }
+    }
+
     public async Task PublishUserBlockChangedAsync(ChatBlockChangedDto change, CancellationToken cancellationToken = default)
     {
         await UserAsync(change.BlockerUserId, Constants.HubEvents.UserBlockChanged, change, cancellationToken);

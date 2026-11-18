@@ -6,11 +6,17 @@ namespace EasyChatz.Services.Hosting;
 internal sealed class EasyChatzDatabaseInitializer(
     ILogger<EasyChatzDatabaseInitializer> logger,
     IOptions<EasyChatzOptions> options,
-    IEasyChatzDbContextFactory contextFactory,
-    IRepository<ChatRoom> rooms) : IHostedService
+    IServiceProvider services) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        var contextFactory = services.GetService<IEasyChatzDbContextFactory>();
+        if (contextFactory is null)
+        {
+            logger.LogWarning("EasyChatz has no database, so chat will not be stored.");
+            return;
+        }
+
         if (options.Value.AutoMigrate)
         {
             try
@@ -32,6 +38,7 @@ internal sealed class EasyChatzDatabaseInitializer(
             return;
         }
 
+        var rooms = services.GetRequiredService<IRepository<ChatRoom>>();
         try
         {
             string name = options.Value.AnnouncementsRoomName;

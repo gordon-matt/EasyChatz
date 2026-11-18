@@ -25,6 +25,9 @@ public abstract class EasyChatzDbContextBase(DbContextOptions options) : DbConte
     /// </summary>
     public DbSet<ChatUserBlock> UserBlocks => Set<ChatUserBlock>();
 
+    /// <summary>Direct-message connection requests.</summary>
+    public DbSet<ChatConnection> Connections => Set<ChatConnection>();
+
     /// <summary>
     /// Whether the provider can hold the tables in <see cref="Constants.Schema"/>. Providers where a
     /// schema is a database (MySQL) or does not exist (SQLite) return <see langword="false"/>, and

@@ -61,6 +61,37 @@ internal sealed class HttpChatService(EasyChatzApiClient api) : IChatService
     public async Task<Result<IReadOnlyList<ChatMentionDto>>> SearchMentionsAsync(string? term, int take = 8, CancellationToken cancellationToken = default) =>
         (await api.GetAsync($"{ApiRoutes.Mentions}?q={Uri.EscapeDataString(term ?? string.Empty)}&take={take}", Json.ListChatMentionDto, cancellationToken)).MapList();
 
+    public async Task<Result<IReadOnlyList<ChatMentionDto>>> SearchPeopleAsync(string? term, int take = 8, CancellationToken cancellationToken = default) =>
+        (await api.GetAsync($"people?q={Uri.EscapeDataString(term ?? string.Empty)}&take={take}", Json.ListChatMentionDto, cancellationToken)).MapList();
+
+    public Task<Result<ChatConversationDto>> RequestConnectionAsync(string userId, string? introduction, CancellationToken cancellationToken = default) =>
+        api.SendAsync(HttpMethod.Post, $"conversations/{Uri.EscapeDataString(userId)}/connection", new ConnectionRequest(introduction), Json.ConnectionRequest, Json.ChatConversationDto, cancellationToken);
+
+    public Task<Result<ChatConversationDto>> AcceptConnectionAsync(string userId, CancellationToken cancellationToken = default) =>
+        api.SendAsync(HttpMethod.Post, $"conversations/{Uri.EscapeDataString(userId)}/connection/accept", Json.ChatConversationDto, cancellationToken);
+
+    public Task<Result<ChatConversationDto>> DeclineConnectionAsync(string userId, CancellationToken cancellationToken = default) =>
+        api.SendAsync(HttpMethod.Post, $"conversations/{Uri.EscapeDataString(userId)}/connection/decline", Json.ChatConversationDto, cancellationToken);
+
+    public async Task<Result<IReadOnlyList<string>>> GetConnectedUserIdsAsync(CancellationToken cancellationToken = default)
+    {
+        var conversations = await GetConversationsAsync(cancellationToken);
+        return !conversations.IsSuccess || conversations.Value is null
+            ? conversations.To<IReadOnlyList<string>>()
+            : Result<IReadOnlyList<string>>.Success(conversations.Value
+                .Where(item => item.Connection == ChatConnectionStatus.Accepted)
+                .Select(item => item.UserId)
+                .ToList());
+    }
+
+    public async Task<Result<int>> CountIncomingRequestsAsync(CancellationToken cancellationToken = default)
+    {
+        var conversations = await GetConversationsAsync(cancellationToken);
+        return !conversations.IsSuccess || conversations.Value is null
+            ? conversations.To<int>()
+            : Result<int>.Success(conversations.Value.Count(item => item.Connection == ChatConnectionStatus.PendingIncoming));
+    }
+
     private static string Page(string path, int? take, int? beforeId)
     {
         var query = new List<string>();
