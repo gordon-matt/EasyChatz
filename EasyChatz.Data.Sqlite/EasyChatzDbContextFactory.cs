@@ -31,8 +31,10 @@ public class EasyChatzDbContextFactory(string connectionString) : IEasyChatzDbCo
     {
         var optionsBuilder = new DbContextOptionsBuilder<EasyChatzDbContext>();
 
+        // The loaded assembly, not its name. A plugin is not on the host's load path, so
+        // Assembly.Load of the name cannot see these migrations and the tables are never created.
         optionsBuilder.UseSqlite(Prepare(connectionString), sqlite => sqlite
-            .MigrationsAssembly(typeof(EasyChatzDbContext).Assembly.GetName().Name)
+            .MigrationsAssembly(typeof(EasyChatzDbContext).Assembly)
             .MigrationsHistoryTable(Constants.MigrationsHistoryTable));
 
         return optionsBuilder.Options;

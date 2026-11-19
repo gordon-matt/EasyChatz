@@ -1,3 +1,4 @@
+using Heroicsoft.NetForge.WebAssets;
 using Microsoft.Extensions.Options;
 
 namespace EasyChatz;
@@ -15,6 +16,7 @@ public static class EndpointRouteBuilderExtensions
         /// </summary>
         public RouteGroupBuilder MapEasyChatzApi(string? prefix = null)
         {
+            endpoints.MapEasyChatzAssets();
             prefix ??= endpoints.ServiceProvider.GetRequiredService<IOptions<EasyChatzOptions>>().Value.ApiPrefix;
             var group = endpoints.MapGroup("/" + prefix.Trim('/')).WithTags("EasyChatz");
             group.AddEndpointFilter(RequireClientHeader);
@@ -97,8 +99,25 @@ public static class EndpointRouteBuilderExtensions
         /// <summary>Maps the SignalR hub the browser joins for live messages and presence.</summary>
         public HubEndpointConventionBuilder MapEasyChatzHub(string? path = null)
         {
+            endpoints.MapEasyChatzAssets();
             path ??= endpoints.ServiceProvider.GetRequiredService<IOptions<EasyChatzOptions>>().Value.HubPath;
             return endpoints.MapHub<ChatHub>("/" + path.Trim('/'));
+        }
+
+        /// <summary>
+        /// Serves the component stylesheet and scripts from the EasyChatz.Components assembly.
+        /// <see cref="MapEasyChatzApi"/> and <see cref="MapEasyChatzHub"/> already call this.
+        /// A host that references the component library keeps the static web assets from that reference.
+        /// </summary>
+        public IEndpointRouteBuilder MapEasyChatzAssets()
+        {
+            var components = EmbeddedContent.Resolve("EasyChatz.Components", typeof(EndpointRouteBuilderExtensions).Assembly);
+            if (components is not null)
+            {
+                endpoints.MapEmbeddedContent(components);
+            }
+
+            return endpoints;
         }
     }
 

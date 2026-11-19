@@ -95,7 +95,7 @@ app.MapEasyChatzHub().RequireAuthorization();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 ```
 
-Add the stylesheet to `App.razor`, and `@using EasyChatz.Components` to `_Imports.razor`:
+Add the stylesheet to `App.razor`, and `@using EasyChatz.Components` to `_Imports.razor`. `MapEasyChatzApi` and `MapEasyChatzHub` also serve that stylesheet and the chat script from the component assembly. A host that references `EasyChatz.Components` still uses the static web assets from that reference. A host that only loads the assemblies, such as a plugin, gets the same files from the assembly and does not copy them into its own `wwwroot`.
 
 ```html
 <link rel="stylesheet" href="@Assets["_content/EasyChatz.Components/easychatz.css"]" />

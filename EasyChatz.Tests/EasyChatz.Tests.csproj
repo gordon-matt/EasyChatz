@@ -11,12 +11,18 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
 		<PackageReference Include="xunit.v3" Version="4.0.3" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\EasyChatz.AspNetCore\EasyChatz.AspNetCore.csproj" />
+		<ProjectReference Include="..\EasyChatz.Components\EasyChatz.Components.csproj" />
 		<ProjectReference Include="..\EasyChatz.Data.Sqlite\EasyChatz.Data.Sqlite.csproj" />
 		<ProjectReference Include="..\EasyChatz.Services\EasyChatz.Services.csproj" />
 	</ItemGroup>

@@ -362,7 +362,7 @@ public partial class Chat : ComponentBase, IAsyncDisposable
     {
         try
         {
-            module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/EasyChatz.Components/easychatz.js");
+            module = await Js.InvokeAsync<IJSObjectReference>("import", ComponentModule.Url);
             self ??= DotNetObjectReference.Create(this);
             return module is not null;
         }

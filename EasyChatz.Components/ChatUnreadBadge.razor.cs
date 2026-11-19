@@ -68,7 +68,7 @@ public partial class ChatUnreadBadge : ComponentBase, IAsyncDisposable
         connecting = true;
         try
         {
-            module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/EasyChatz.Components/easychatz.js");
+            module = await Js.InvokeAsync<IJSObjectReference>("import", ComponentModule.Url);
             self = DotNetObjectReference.Create(this);
             string hub = Address.HubUrl;
             if (!TrackPresence)
